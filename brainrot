@@ -1,11 +1,12 @@
--- // Karker Hub v2.0 // --
--- Clean + Animated GUI with Minimize, Credits, and Loading Screen
--- Made for YOUNG
+-- // Karker Hub v2.5 // --
+-- Loading Screen w/ Snow + Better Minimize
+-- Created by YOUNG
 
 -- // Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
@@ -16,25 +17,64 @@ StarterGui:SetCore("SendNotification", {
     Duration = 5
 })
 
--- // Typewriter Loading
-local message = "THANKS FOR CHOOSING KARKER HUB WHERE ANYONE GETS STEAL AND DONT EVEN NOTICE!!!"
+-- // Loading Screen
 local loadingGui = Instance.new("ScreenGui", player.PlayerGui)
 loadingGui.ResetOnSpawn = false
-local loadingText = Instance.new("TextLabel", loadingGui)
+
+local bg = Instance.new("Frame", loadingGui)
+bg.Size = UDim2.new(1, 0, 1, 0)
+bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+
+local loadingText = Instance.new("TextLabel", bg)
 loadingText.Size = UDim2.new(1, 0, 0, 100)
 loadingText.Position = UDim2.new(0, 0, 0.4, 0)
 loadingText.BackgroundTransparency = 1
 loadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
-loadingText.Font = Enum.Font.SourceSansBold
-loadingText.TextSize = 30
+loadingText.Font = Enum.Font.GothamBold
+loadingText.TextSize = 28
 loadingText.Text = ""
 
+-- Snow container
+local snowFolder = Instance.new("Folder", bg)
+
+-- Snowfall effect
+task.spawn(function()
+    while bg.Parent do
+        local snow = Instance.new("Frame", snowFolder)
+        snow.Size = UDim2.new(0, math.random(3, 6), 0, math.random(3, 6))
+        snow.Position = UDim2.new(math.random(), 0, -0.1, 0)
+        snow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        snow.BackgroundTransparency = 0.2
+        snow.BorderSizePixel = 0
+        snow.ZIndex = 10
+
+        local xOffset = math.random(-50, 50)
+        local fallTween = TweenService:Create(snow, TweenInfo.new(math.random(3, 6)), {
+            Position = UDim2.new(snow.Position.X.Scale, xOffset, 1.1, 0),
+            BackgroundTransparency = 1
+        })
+        fallTween:Play()
+        game:GetService("Debris"):AddItem(snow, 6)
+
+        task.wait(0.1)
+    end
+end)
+
+-- Typewriter
+local message = "THANKS FOR CHOOSING KARKER HUB WHERE ANYONE GETS STEAL AND DONT EVEN NOTICE!!!"
 task.spawn(function()
     for i = 1, #message do
         loadingText.Text = string.sub(message, 1, i)
         task.wait(0.05)
     end
     task.wait(2)
+    -- Fade out loading
+    TweenService:Create(bg, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(loadingText, TweenInfo.new(1), {TextTransparency = 1}):Play()
+    for _, snow in ipairs(snowFolder:GetChildren()) do
+        TweenService:Create(snow, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    end
+    task.wait(1.2)
     loadingGui:Destroy()
 end)
 
@@ -50,15 +90,13 @@ frame.BorderSizePixel = 0
 frame.Active = true
 frame.Draggable = true
 frame.Visible = false
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
 
-local uicorner = Instance.new("UICorner", frame)
-uicorner.CornerRadius = UDim.new(0, 12)
-
--- Fade in after loading
-task.wait(4)
+-- Slide in after loading
+task.wait(4.5)
 frame.Visible = true
-frame.BackgroundTransparency = 1
-TweenService:Create(frame, TweenInfo.new(1), {BackgroundTransparency = 0}):Play()
+frame.Position = UDim2.new(0.5, -200, 1, 0)
+TweenService:Create(frame, TweenInfo.new(1, Enum.EasingStyle.Quint), {Position = UDim2.new(0.5, -200, 0.5, -125)}):Play()
 
 -- Title
 local title = Instance.new("TextLabel", frame)
@@ -83,12 +121,25 @@ minimize.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 6)
 
 local minimized = false
+local fullSize = UDim2.new(0, 400, 0, 250)
+local miniSize = UDim2.new(0, 400, 0, 40)
+
 minimize.MouseButton1Click:Connect(function()
     minimized = not minimized
     if minimized then
-        TweenService:Create(frame, TweenInfo.new(0.5), {Size = UDim2.new(0, 400, 0, 40)}):Play()
+        for _, child in ipairs(frame:GetChildren()) do
+            if child:IsA("TextButton") and child ~= minimize then
+                child.Visible = false
+            end
+        end
+        TweenService:Create(frame, TweenInfo.new(0.5), {Size = miniSize}):Play()
     else
-        TweenService:Create(frame, TweenInfo.new(0.5), {Size = UDim2.new(0, 400, 0, 250)}):Play()
+        for _, child in ipairs(frame:GetChildren()) do
+            if child:IsA("TextButton") and child ~= minimize then
+                child.Visible = true
+            end
+        end
+        TweenService:Create(frame, TweenInfo.new(0.5), {Size = fullSize}):Play()
     end
 end)
 
