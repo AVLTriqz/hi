@@ -1,0 +1,352 @@
+--// Karker Hub V6 — Final Boss Edition
+--// PC + Mobile | Aura FX | ESP | Teleport | Float | Server Hop | Snow Loading | Notifications
+
+--// Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+--------------------------------------------------------
+--// Helpers
+--------------------------------------------------------
+local function tween(obj, time, props)
+    TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+end
+
+local function newUICorner(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 12)
+    c.Parent = parent
+    return c
+end
+
+--------------------------------------------------------
+--// Notifications (Bottom Left)
+--------------------------------------------------------
+local notifGui = Instance.new("ScreenGui", playerGui)
+notifGui.Name = "KH_Notifs"
+notifGui.ResetOnSpawn = false
+
+local notifHolder = Instance.new("Frame", notifGui)
+notifHolder.AnchorPoint = Vector2.new(0,1)
+notifHolder.Size = UDim2.new(0, 280, 0, 300)
+notifHolder.Position = UDim2.new(0, 12, 1, -12)
+notifHolder.BackgroundTransparency = 1
+
+local layout = Instance.new("UIListLayout", notifHolder)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0,8)
+
+local function notify(title, msg, duration)
+    duration = duration or 3
+    local frame = Instance.new("Frame", notifHolder)
+    frame.Size = UDim2.new(1,0,0,0)
+    frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+    frame.BorderSizePixel = 0
+    newUICorner(frame, 12)
+
+    local titleLbl = Instance.new("TextLabel", frame)
+    titleLbl.Size = UDim2.new(1,-10,0,22)
+    titleLbl.Position = UDim2.new(0,6,0,6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.Text = title
+    titleLbl.TextSize = 16
+    titleLbl.TextColor3 = Color3.fromRGB(255,180,50)
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local msgLbl = Instance.new("TextLabel", frame)
+    msgLbl.Size = UDim2.new(1,-10,0,40)
+    msgLbl.Position = UDim2.new(0,6,0,28)
+    msgLbl.BackgroundTransparency = 1
+    msgLbl.Font = Enum.Font.Gotham
+    msgLbl.Text = msg
+    msgLbl.TextSize = 14
+    msgLbl.TextColor3 = Color3.fromRGB(230,230,230)
+    msgLbl.TextWrapped = true
+    msgLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    tween(frame, 0.25, {Size = UDim2.new(1,0,0,72)})
+    task.delay(duration,function()
+        tween(frame,0.2,{Size=UDim2.new(1,0,0,0)})
+        task.wait(0.22)
+        frame:Destroy()
+    end)
+end
+
+--------------------------------------------------------
+--// Loading Screen
+--------------------------------------------------------
+local loadingGui = Instance.new("ScreenGui", playerGui)
+loadingGui.Name = "KH_Loading"
+loadingGui.IgnoreGuiInset = true
+loadingGui.ResetOnSpawn = false
+
+local bg = Instance.new("Frame", loadingGui)
+bg.Size = UDim2.new(1,0,1,0)
+bg.BackgroundColor3 = Color3.fromRGB(15,15,15)
+
+local label = Instance.new("TextLabel", bg)
+label.Size = UDim2.new(1,0,0,80)
+label.Position = UDim2.new(0,0,0.4,0)
+label.BackgroundTransparency = 1
+label.Font = Enum.Font.GothamBold
+label.TextSize = 28
+label.TextColor3 = Color3.new(1,1,1)
+label.Text = ""
+
+-- Snow effect
+task.spawn(function()
+    while bg.Parent do
+        local snow = Instance.new("Frame", bg)
+        snow.Size = UDim2.new(0, math.random(3,6), 0, math.random(3,6))
+        snow.Position = UDim2.new(math.random(),0,-0.1,0)
+        snow.BackgroundColor3 = Color3.new(1,1,1)
+        snow.BorderSizePixel = 0
+        snow.BackgroundTransparency = 0.2
+        local fall = TweenService:Create(snow, TweenInfo.new(math.random(3,6)), {
+            Position = UDim2.new(snow.Position.X.Scale, math.random(-60,60), 1.1,0),
+            BackgroundTransparency = 1
+        })
+        fall:Play()
+        Debris:AddItem(snow,6)
+        task.wait(0.1)
+    end
+end)
+
+-- Funny loading text
+local funnyMsg = "❄️ Welcome to Karker Hub V6 ❄️\nStealing made stylish 😈"
+task.spawn(function()
+    for i=1,#funnyMsg do
+        label.Text = funnyMsg:sub(1,i)
+        task.wait(0.05)
+    end
+    task.wait(2)
+    tween(bg,1,{BackgroundTransparency=1})
+    tween(label,1,{TextTransparency=1})
+    task.wait(1.2)
+    loadingGui:Destroy()
+    mainGui.Enabled = true
+end)
+
+--------------------------------------------------------
+--// Main GUI
+--------------------------------------------------------
+local mainGui = Instance.new("ScreenGui", playerGui)
+mainGui.Name = "KarkerHub"
+mainGui.ResetOnSpawn = false
+mainGui.Enabled = false -- wait until loading finishes
+
+local window = Instance.new("Frame", mainGui)
+window.Size = UDim2.new(0, 360, 0, 420)
+window.Position = UDim2.new(0.5,-180,0.5,-210)
+window.AnchorPoint = Vector2.new(0.5,0.5)
+window.BackgroundColor3 = Color3.fromRGB(25,25,25)
+newUICorner(window,16)
+
+-- Dragging (PC + Mobile)
+do
+    local dragging,dragStart,startPos
+    local function update(input)
+        local delta = input.Position - dragStart
+        window.Position = UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
+    end
+    window.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            dragging=true; dragStart=input.Position; startPos=window.Position
+            input.Changed:Connect(function()
+                if input.UserInputState==Enum.UserInputState.End then dragging=false end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+end
+
+-- Header
+local header = Instance.new("Frame", window)
+header.Size = UDim2.new(1,0,0,50)
+header.BackgroundColor3 = Color3.fromRGB(40,40,40)
+newUICorner(header,12)
+
+local title = Instance.new("TextLabel", header)
+title.Size = UDim2.new(1,-100,1,0)
+title.Position = UDim2.new(0,12,0,0)
+title.BackgroundTransparency=1
+title.Font=Enum.Font.GothamBold
+title.Text="Karker Hub V6"
+title.TextSize=20
+title.TextColor3=Color3.new(1,1,1)
+title.TextXAlignment=Enum.TextXAlignment.Left
+
+-- Header buttons
+local destroy = Instance.new("TextButton", header)
+destroy.Size=UDim2.new(0,40,0,32)
+destroy.Position=UDim2.new(1,-45,0.5,-16)
+destroy.Text="X"
+destroy.Font=Enum.Font.GothamBold
+destroy.TextSize=18
+destroy.BackgroundColor3=Color3.fromRGB(90,30,30)
+newUICorner(destroy,8)
+
+destroy.MouseButton1Click:Connect(function()
+    mainGui:Destroy()
+end)
+
+-- Scrollable content
+local scroll = Instance.new("ScrollingFrame", window)
+scroll.Size=UDim2.new(1,-20,1,-70)
+scroll.Position=UDim2.new(0,10,0,60)
+scroll.BackgroundTransparency=1
+scroll.CanvasSize=UDim2.new(0,0,0,1000)
+scroll.ScrollBarThickness=6
+local layout = Instance.new("UIListLayout", scroll)
+layout.Padding=UDim.new(0,12)
+
+-- Button maker
+local function createButton(text, callback)
+    local btn=Instance.new("TextButton",scroll)
+    btn.Size=UDim2.new(1,-10,0,50)
+    btn.Text=text
+    btn.Font=Enum.Font.GothamBold
+    btn.TextSize=18
+    btn.TextColor3=Color3.fromRGB(240,240,240)
+    btn.BackgroundColor3=Color3.fromRGB(45,45,45)
+    newUICorner(btn,12)
+    btn.MouseButton1Click:Connect(function()
+        tween(btn,0.15,{BackgroundColor3=Color3.fromRGB(80,40,40)})
+        task.wait(0.2)
+        tween(btn,0.15,{BackgroundColor3=Color3.fromRGB(45,45,45)})
+        callback()
+    end)
+end
+
+--------------------------------------------------------
+--// Features
+--------------------------------------------------------
+
+-- Float
+local floatPart
+local function enableFloat()
+    if not floatPart then
+        floatPart=Instance.new("Part",workspace)
+        floatPart.Anchored=true
+        floatPart.Size=Vector3.new(6,1,6)
+        floatPart.Transparency=1
+        floatPart.CanCollide=true
+        RunService.RenderStepped:Connect(function()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                floatPart.Position=player.Character.HumanoidRootPart.Position-Vector3.new(0,3.5,0)
+            end
+        end)
+        notify("Float","Enabled float bypass",3)
+    end
+end
+
+-- Aura (Special Sauce)
+local auraActive=false
+local function enableAura()
+    if auraActive then return end
+    auraActive=true
+    notify("Special Sauce","😈 Huh I see u tryna steal lol",3)
+    task.wait(2)
+    -- Visual FX
+    local circle=Instance.new("Part",workspace)
+    circle.Anchored=true
+    circle.CanCollide=false
+    circle.Shape=Enum.PartType.Ball
+    circle.Size=Vector3.new(15,1,15)
+    circle.Material=Enum.Material.Neon
+    circle.Color=Color3.fromRGB(255,80,0)
+    Debris:AddItem(circle,9999)
+
+    RunService.RenderStepped:Connect(function()
+        if not auraActive or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+        local root=player.Character.HumanoidRootPart
+        circle.Position=root.Position-Vector3.new(0,3,0)
+
+        for _,plr in pairs(Players:GetPlayers()) do
+            if plr~=player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                if (plr.Character.HumanoidRootPart.Position-root.Position).Magnitude<15 then
+                    plr.Character.Humanoid:TakeDamage(2)
+                end
+            end
+        end
+    end)
+end
+
+-- ESP
+local espEnabled=false
+local function toggleESP()
+    espEnabled=not espEnabled
+    if espEnabled then
+        notify("ESP","ESP Enabled",3)
+        RunService.RenderStepped:Connect(function()
+            if not espEnabled then return end
+            for _,plr in pairs(Players:GetPlayers()) do
+                if plr~=player and plr.Character and plr.Character:FindFirstChild("Head") then
+                    if not plr.Character.Head:FindFirstChild("KH_ESP") then
+                        local billboard=Instance.new("BillboardGui",plr.Character.Head)
+                        billboard.Name="KH_ESP"
+                        billboard.Size=UDim2.new(0,200,0,50)
+                        billboard.AlwaysOnTop=true
+                        local txt=Instance.new("TextLabel",billboard)
+                        txt.Size=UDim2.new(1,0,1,0)
+                        txt.BackgroundTransparency=1
+                        txt.Text=plr.Name
+                        txt.Font=Enum.Font.GothamBold
+                        txt.TextSize=14
+                        txt.TextColor3=Color3.new(1,0,0)
+                    end
+                end
+            end
+        end)
+    else
+        for _,plr in pairs(Players:GetPlayers()) do
+            if plr.Character and plr.Character:FindFirstChild("Head") then
+                local esp=plr.Character.Head:FindFirstChild("KH_ESP")
+                if esp then esp:Destroy() end
+            end
+        end
+        notify("ESP","ESP Disabled",3)
+    end
+end
+
+-- Teleport Anywhere
+local function teleportClick()
+    notify("Teleport","Click anywhere to teleport",3)
+    local conn
+    conn=UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 then
+            local mouse=player:GetMouse()
+            if mouse.Target then
+                player.Character.HumanoidRootPart.CFrame=CFrame.new(mouse.Hit.Position+Vector3.new(0,3,0))
+                conn:Disconnect()
+            end
+        end
+    end)
+end
+
+-- Server Hop
+local function serverHop()
+    notify("Server Hop","Finding new server...",3)
+    TeleportService:Teleport(game.PlaceId,player)
+end
+
+--------------------------------------------------------
+--// Buttons
+--------------------------------------------------------
+createButton("Special Sauce (Aura)",enableAura)
+createButton("Enable Float",enableFloat)
+createButton("ESP Toggle",toggleESP)
+createButton("Teleport Anywhere (Click)",teleportClick)
+createButton("Server Hop",serverHop)
