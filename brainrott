@@ -1,21 +1,69 @@
--- // Karker Hub v2.5 // --
--- Loading Screen w/ Snow + Better Minimize
--- Created by YOUNGG
+-- // Karker Hub v3.0 // --
+-- Complete Loading Screen + Custom Notifications + Server Hop + Float
+-- Improved by YOUNG
 
 -- // Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local TeleportService = game:GetService("TeleportService")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
--- // Notification
-StarterGui:SetCore("SendNotification", {
-    Title = "Welcome!",
-    Text = "Welcome " .. player.Name .. " to Karker Hub",
-    Duration = 5
-})
+-- // Utility Functions
+local function tween(obj, time, props, style, dir)
+    TweenService:Create(obj, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
+end
+
+-- // Custom Notification System
+local notificationGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+notificationGui.Name = "KarkerNotifications"
+notificationGui.ResetOnSpawn = false
+
+local notifHolder = Instance.new("Frame", notificationGui)
+notifHolder.Size = UDim2.new(0, 300, 1, 0)
+notifHolder.Position = UDim2.new(1, -320, 0, 10)
+notifHolder.BackgroundTransparency = 1
+
+local function notify(title, msg, dur)
+    local frame = Instance.new("Frame", notifHolder)
+    frame.Size = UDim2.new(1, 0, 0, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.ClipsDescendants = true
+    frame.BackgroundTransparency = 0
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+    local titleLbl = Instance.new("TextLabel", frame)
+    titleLbl.Size = UDim2.new(1, -10, 0, 22)
+    titleLbl.Position = UDim2.new(0, 5, 0, 5)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.Text = title
+    titleLbl.TextColor3 = Color3.fromRGB(255, 200, 50)
+    titleLbl.TextSize = 18
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local msgLbl = Instance.new("TextLabel", frame)
+    msgLbl.Size = UDim2.new(1, -10, 0, 40)
+    msgLbl.Position = UDim2.new(0, 5, 0, 28)
+    msgLbl.BackgroundTransparency = 1
+    msgLbl.Font = Enum.Font.Gotham
+    msgLbl.Text = msg
+    msgLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    msgLbl.TextSize = 15
+    msgLbl.TextXAlignment = Enum.TextXAlignment.Left
+    msgLbl.TextWrapped = true
+
+    -- Animate
+    tween(frame, 0.3, {Size = UDim2.new(1, 0, 0, 70)})
+    task.delay(dur or 4, function()
+        tween(frame, 0.3, {Size = UDim2.new(1, 0, 0, 0)})
+        task.wait(0.4)
+        frame:Destroy()
+    end)
+end
 
 -- // Loading Screen
 local loadingGui = Instance.new("ScreenGui", player.PlayerGui)
@@ -23,59 +71,48 @@ loadingGui.ResetOnSpawn = false
 
 local bg = Instance.new("Frame", loadingGui)
 bg.Size = UDim2.new(1, 0, 1, 0)
-bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+bg.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 
 local loadingText = Instance.new("TextLabel", bg)
-loadingText.Size = UDim2.new(1, 0, 0, 100)
-loadingText.Position = UDim2.new(0, 0, 0.4, 0)
+loadingText.Size = UDim2.new(1, 0, 0, 80)
+loadingText.Position = UDim2.new(0, 0, 0.45, 0)
 loadingText.BackgroundTransparency = 1
 loadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
 loadingText.Font = Enum.Font.GothamBold
 loadingText.TextSize = 28
 loadingText.Text = ""
 
--- Snow container
-local snowFolder = Instance.new("Folder", bg)
+-- Snow + Fire Particles
+local particleEmitter = Instance.new("ParticleEmitter")
+particleEmitter.Texture = "rbxassetid://8139665945" -- snowflake
+particleEmitter.Rate = 15
+particleEmitter.Lifetime = NumberRange.new(4, 7)
+particleEmitter.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.5)})
+particleEmitter.Speed = NumberRange.new(5, 10)
+particleEmitter.VelocitySpread = 180
 
--- Snowfall effect
-task.spawn(function()
-    while bg.Parent do
-        local snow = Instance.new("Frame", snowFolder)
-        snow.Size = UDim2.new(0, math.random(3, 6), 0, math.random(3, 6))
-        snow.Position = UDim2.new(math.random(), 0, -0.1, 0)
-        snow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        snow.BackgroundTransparency = 0.2
-        snow.BorderSizePixel = 0
-        snow.ZIndex = 10
+local particlePart = Instance.new("Part")
+particlePart.Anchored = true
+particlePart.CanCollide = false
+particlePart.Transparency = 1
+particlePart.Size = Vector3.new(50, 1, 50)
+particlePart.Position = Vector3.new(0, 100, 0)
+particleEmitter.Parent = particlePart
+particlePart.Parent = workspace
 
-        local xOffset = math.random(-50, 50)
-        local fallTween = TweenService:Create(snow, TweenInfo.new(math.random(3, 6)), {
-            Position = UDim2.new(snow.Position.X.Scale, xOffset, 1.1, 0),
-            BackgroundTransparency = 1
-        })
-        fallTween:Play()
-        game:GetService("Debris"):AddItem(snow, 6)
-
-        task.wait(0.1)
-    end
-end)
-
--- Typewriter
-local message = "THANKS FOR CHOOSING KARKER HUB WHERE ANYONE GETS STEAL AND DONT EVEN NOTICE!!!"
+-- Typewriter Effect
+local message = "THANKS FOR CHOOSING KARKER HUB – LOADING..."
 task.spawn(function()
     for i = 1, #message do
         loadingText.Text = string.sub(message, 1, i)
         task.wait(0.05)
     end
     task.wait(2)
-    -- Fade out loading
-    TweenService:Create(bg, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(loadingText, TweenInfo.new(1), {TextTransparency = 1}):Play()
-    for _, snow in ipairs(snowFolder:GetChildren()) do
-        TweenService:Create(snow, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-    end
+    tween(bg, 1, {BackgroundTransparency = 1})
+    tween(loadingText, 1, {TextTransparency = 1})
     task.wait(1.2)
     loadingGui:Destroy()
+    particlePart:Destroy()
 end)
 
 -- // Main GUI
@@ -84,7 +121,7 @@ mainGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", mainGui)
 frame.Size = UDim2.new(0, 400, 0, 250)
-frame.Position = UDim2.new(0.5, -200, 0.5, -125)
+frame.Position = UDim2.new(0.5, -200, 1, 0)
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BorderSizePixel = 0
 frame.Active = true
@@ -92,11 +129,10 @@ frame.Draggable = true
 frame.Visible = false
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
 
--- Slide in after loading
+-- Slide in
 task.wait(4.5)
 frame.Visible = true
-frame.Position = UDim2.new(0.5, -200, 1, 0)
-TweenService:Create(frame, TweenInfo.new(1, Enum.EasingStyle.Quint), {Position = UDim2.new(0.5, -200, 0.5, -125)}):Play()
+tween(frame, 1, {Position = UDim2.new(0.5, -200, 0.5, -125)}, Enum.EasingStyle.Quint)
 
 -- Title
 local title = Instance.new("TextLabel", frame)
@@ -109,7 +145,7 @@ title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left
 
--- Minimize Button
+-- Minimize
 local minimize = Instance.new("TextButton", frame)
 minimize.Size = UDim2.new(0, 30, 0, 30)
 minimize.Position = UDim2.new(1, -35, 0, 5)
@@ -132,19 +168,19 @@ minimize.MouseButton1Click:Connect(function()
                 child.Visible = false
             end
         end
-        TweenService:Create(frame, TweenInfo.new(0.5), {Size = miniSize}):Play()
+        tween(frame, 0.4, {Size = miniSize})
     else
         for _, child in ipairs(frame:GetChildren()) do
             if child:IsA("TextButton") and child ~= minimize then
                 child.Visible = true
             end
         end
-        TweenService:Create(frame, TweenInfo.new(0.5), {Size = fullSize}):Play()
+        tween(frame, 0.4, {Size = fullSize})
     end
 end)
 
 -- Buttons
-local function createButton(text, yPos)
+local function createButton(text, yPos, callback)
     local button = Instance.new("TextButton", frame)
     button.Size = UDim2.new(0.9, 0, 0, 40)
     button.Position = UDim2.new(0.05, 0, 0, yPos)
@@ -155,38 +191,61 @@ local function createButton(text, yPos)
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
 
-    -- Hover animation
+    -- Hover
     button.MouseEnter:Connect(function()
-        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}):Play()
+        tween(button, 0.2, {BackgroundColor3 = Color3.fromRGB(55, 55, 55)})
     end)
     button.MouseLeave:Connect(function()
-        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}):Play()
+        tween(button, 0.2, {BackgroundColor3 = Color3.fromRGB(35, 35, 35)})
     end)
 
+    button.MouseButton1Click:Connect(callback)
     return button
 end
 
-local btn1 = createButton("Creator Tab", 60)
-local btn2 = createButton("Executor", 110)
-local btn3 = createButton("Credits", 160)
-
--- Button actions
-btn1.MouseButton1Click:Connect(function()
-    btn1.Text = "Creator Tab (6-7)"
+createButton("Creator Tab", 60, function()
+    notify("Creator Tab", "Welcome to Creator Tab (6-7)", 4)
 end)
 
-btn2.MouseButton1Click:Connect(function()
-    StarterGui:SetCore("SendNotification", {
-        Title = "Executor",
-        Text = "This is where scripts run.",
-        Duration = 3
-    })
+createButton("Executor", 110, function()
+    notify("Executor", "This is where scripts run.", 4)
 end)
 
-btn3.MouseButton1Click:Connect(function()
-    StarterGui:SetCore("SendNotification", {
-        Title = "Credits",
-        Text = "Created by YOUNG",
-        Duration = 4
-    })
+createButton("Credits", 160, function()
+    notify("Credits", "Made by YOUNG", 4)
 end)
+
+createButton("Server Hop", 210, function()
+    notify("Server Hop", "Searching for new server...", 3)
+    local servers = {}
+    local req = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+    local data = game:GetService("HttpService"):JSONDecode(req)
+    for _, v in pairs(data.data) do
+        if v.playing < v.maxPlayers then
+            table.insert(servers, v.id)
+        end
+    end
+    if #servers > 0 then
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], player)
+    else
+        notify("Server Hop", "No available servers found!", 4)
+    end
+end)
+
+createButton("Float", 260, function()
+    notify("Float", "Enabled float mode.", 3)
+    local floatPart = Instance.new("Part")
+    floatPart.Anchored = true
+    floatPart.CanCollide = true
+    floatPart.Size = Vector3.new(6, 1, 6)
+    floatPart.CFrame = player.Character.HumanoidRootPart.CFrame - Vector3.new(0, 3, 0)
+    floatPart.Parent = workspace
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = floatPart
+    weld.Part1 = player.Character.HumanoidRootPart
+    weld.Parent = floatPart
+end)
+
+-- Welcome Notification
+notify("Welcome!", "Hello " .. player.Name .. " – Enjoy Karker Hub v3.0!", 5)
