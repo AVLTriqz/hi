@@ -1,0 +1,647 @@
+-- Karker GUI v1.3 — Roblox LocalScript (paste into StarterGui as a LocalScript)
+-- Features: Tabs, animated buttons, confetti, particle overlay, background chooser (use uploaded decal IDs), simple ambient audio (use uploaded sound IDs).
+-- IMPORTANT: Replace the BG_DECAL_IDS and AMBIENT_SOUND_IDS arrays with Roblox asset IDs you upload.
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Prevent duplicate
+local existing = playerGui:FindFirstChild("KarkerGUI")
+if existing then
+	existing:Destroy()
+end
+
+-- CONFIG (replace these placeholder IDs with actual uploaded Roblox asset IDs)
+local MAIN_PFP_DECAL = nil -- e.g. 12345678 (optional). Leave nil to use text-only icon
+local CREATOR_PFP_DECAL = nil -- e.g. 23456789
+-- Put your uploaded background decal IDs (images). For animated backgrounds: upload video asset and modify applyBackground to use a VideoFrame.
+local BG_DECAL_IDS = {
+	-- replace with numbers: example: 12345678, 23456789, 34567890
+	-- [1] = 12345678,
+	-- [2] = 23456789,
+	-- [3] = 34567890,
+}
+-- Ambient sound asset IDs (looping). Replace with your uploaded sound IDs.
+local AMBIENT_SOUND_IDS = {
+	-- [1] = 1837465, -- example
+}
+
+-- UI creation
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KarkerGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 1000
+ScreenGui.Parent = playerGui
+
+-- overlay background image (full screen)
+local bgOverlay = Instance.new("ImageLabel")
+bgOverlay.Name = "BackgroundOverlay"
+bgOverlay.AnchorPoint = Vector2.new(0.5, 0.5)
+bgOverlay.Position = UDim2.new(0.5, 0, 0.5, 0)
+bgOverlay.Size = UDim2.new(1, 0, 1, 0)
+bgOverlay.BackgroundTransparency = 1
+bgOverlay.ImageTransparency = 0.78
+bgOverlay.ZIndex = 1
+bgOverlay.Parent = ScreenGui
+bgOverlay.Visible = false
+
+-- main panel
+local Panel = Instance.new("Frame")
+Panel.Name = "Panel"
+Panel.Size = UDim2.new(0, 480, 0, 340)
+Panel.Position = UDim2.new(0.5, -240, 0.5, -170)
+Panel.AnchorPoint = Vector2.new(0.5, 0.5)
+Panel.BackgroundColor3 = Color3.fromRGB(12, 8, 18)
+Panel.BorderSizePixel = 0
+Panel.ZIndex = 2
+Panel.Parent = ScreenGui
+
+local PanelCorner = Instance.new("UICorner", Panel)
+PanelCorner.CornerRadius = UDim.new(0, 14)
+
+-- top bar
+local Top = Instance.new("Frame")
+Top.Name = "Top"
+Top.Size = UDim2.new(1, 0, 0, 76)
+Top.BackgroundTransparency = 1
+Top.Parent = Panel
+
+local Pfp = Instance.new("ImageLabel")
+Pfp.Name = "Pfp"
+Pfp.Parent = Top
+Pfp.Size = UDim2.new(0, 64, 0, 64)
+Pfp.Position = UDim2.new(0, 14, 0, 6)
+Pfp.BackgroundTransparency = 1
+Pfp.ZIndex = 3
+if MAIN_PFP_DECAL then
+	Pfp.Image = "rbxassetid://"..tostring(MAIN_PFP_DECAL)
+else
+	-- fallback to colored circle
+	Pfp.Image = ""
+	Pfp.BackgroundColor3 = Color3.fromRGB(155, 107, 255)
+end
+local PfpCorner = Instance.new("UICorner", Pfp)
+PfpCorner.CornerRadius = UDim.new(1, 0)
+
+local Title = Instance.new("TextLabel")
+Title.Parent = Top
+Title.Position = UDim2.new(0, 92, 0, 12)
+Title.Size = UDim2.new(0.6, 0, 0, 28)
+Title.BackgroundTransparency = 1
+Title.Text = "Karker"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.TextColor3 = Color3.fromRGB(230,230,246)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 3
+
+local Tag = Instance.new("TextLabel")
+Tag.Parent = Top
+Tag.Position = UDim2.new(0, 92, 0, 36)
+Tag.Size = UDim2.new(0.6, 0, 0, 20)
+Tag.BackgroundTransparency = 1
+Tag.Text = "UI — cosmetic only"
+Tag.Font = Enum.Font.Gotham
+Tag.TextSize = 13
+Tag.TextColor3 = Color3.fromRGB(127,227,255)
+Tag.TextXAlignment = Enum.TextXAlignment.Left
+Tag.ZIndex = 3
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Parent = Top
+MinBtn.Size = UDim2.new(0, 36, 0, 28)
+MinBtn.Position = UDim2.new(1, -46, 0, 14)
+MinBtn.Text = "—"
+MinBtn.BackgroundTransparency = 0.8
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextColor3 = Color3.fromRGB(230,230,246)
+MinBtn.ZIndex = 3
+local MinCorner = Instance.new("UICorner", MinBtn)
+MinCorner.CornerRadius = UDim.new(0, 6)
+
+-- tabs row
+local TabsRow = Instance.new("Frame")
+TabsRow.Name = "TabsRow"
+TabsRow.Size = UDim2.new(1, -28, 0, 48)
+TabsRow.Position = UDim2.new(0, 14, 0, 88)
+TabsRow.BackgroundTransparency = 1
+TabsRow.Parent = Panel
+
+local TabsLayout = Instance.new("UIListLayout", TabsRow)
+TabsLayout.FillDirection = Enum.FillDirection.Horizontal
+TabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+TabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TabsLayout.Padding = UDim.new(0, 8)
+
+-- function to create a styled tab button
+local function createTabButton(text)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 120, 0, 36)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.Text = text
+	b.TextColor3 = Color3.fromRGB(238,238,243)
+	b.BackgroundColor3 = Color3.fromRGB(40, 40, 44)
+	b.AutoButtonColor = false
+	b.Parent = TabsRow
+	local c = Instance.new("UICorner", b); c.CornerRadius = UDim.new(0, 8)
+	-- hover effect
+	b.MouseEnter:Connect(function()
+		TweenService:Create(b, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {BackgroundColor3 = Color3.fromRGB(127,227,255)}):Play()
+		TweenService:Create(b, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {TextColor3 = Color3.fromRGB(5,3,10)}):Play()
+	end)
+	b.MouseLeave:Connect(function()
+		TweenService:Create(b, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {BackgroundColor3 = Color3.fromRGB(40,40,44)}):Play()
+		TweenService:Create(b, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {TextColor3 = Color3.fromRGB(238,238,243)}):Play()
+	end)
+	return b
+end
+
+local tabNames = {"Main", "Visuals", "Audio", "About"}
+local tabButtons = {}
+for i, n in ipairs(tabNames) do
+	tabButtons[n] = createTabButton(n)
+end
+
+-- content area
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, -28, 1, -156)
+Content.Position = UDim2.new(0, 14, 0, 140)
+Content.BackgroundTransparency = 1
+Content.Parent = Panel
+
+-- helpers to create pages
+local Pages = {}
+local function createPage(name)
+	local p = Instance.new("Frame")
+	p.Size = UDim2.new(1, 0, 1, 0)
+	p.BackgroundTransparency = 1
+	p.Visible = false
+	p.Parent = Content
+	Pages[name] = p
+	return p
+end
+
+local mainPage = createPage("Main")
+local visualsPage = createPage("Visuals")
+local audioPage = createPage("Audio")
+local aboutPage = createPage("About")
+
+-- small notification (bottom-right)
+local notif = Instance.new("Frame")
+notif.Size = UDim2.new(0, 280, 0, 64)
+notif.Position = UDim2.new(1, -300, 1, -100)
+notif.AnchorPoint = Vector2.new(0, 0)
+notif.BackgroundColor3 = Color3.fromRGB(12, 12, 14)
+notif.BackgroundTransparency = 0.05
+notif.BorderSizePixel = 0
+notif.ZIndex = 5
+notif.Parent = ScreenGui
+local notifCorner = Instance.new("UICorner", notif); notifCorner.CornerRadius = UDim.new(0, 10)
+notif.Visible = false
+
+local notifLabel = Instance.new("TextLabel", notif)
+notifLabel.Size = UDim2.new(1, -20, 1, -20)
+notifLabel.Position = UDim2.new(0, 10, 0, 10)
+notifLabel.BackgroundTransparency = 1
+notifLabel.TextColor3 = Color3.fromRGB(238,238,243)
+notifLabel.Font = Enum.Font.Gotham
+notifLabel.TextSize = 14
+notifLabel.TextWrapped = true
+
+local function showNotif(text, dur)
+	dur = dur or 3.8
+	notifLabel.Text = text
+	notif.Visible = true
+	notif.BackgroundTransparency = 0
+	TweenService:Create(notif, TweenInfo.new(0.28), {Position = UDim2.new(1, -300, 1, -120), BackgroundTransparency = 0.05}):Play()
+	delay(dur, function()
+		TweenService:Create(notif, TweenInfo.new(0.28), {Position = UDim2.new(1, -300, 1, -100), BackgroundTransparency = 1}):Play()
+		wait(0.3)
+		notif.Visible = false
+	end)
+end
+
+-- Utility: styled action button factory
+local function actionButton(parent, text, ghost)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 160, 0, 38)
+	b.BackgroundColor3 = ghost and Color3.fromRGB(255,107,179) or Color3.fromRGB(123,107,255)
+	b.Text = text
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.TextColor3 = Color3.fromRGB(5,3,10)
+	b.AutoButtonColor = false
+	b.Parent = parent
+	local c = Instance.new("UICorner", b); c.CornerRadius = UDim.new(0, 10)
+
+	-- press animation
+	b.MouseButton1Click:Connect(function()
+		local t = TweenService:Create(b, TweenInfo.new(0.14, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 156, 0, 36)})
+		t:Play()
+		t.Completed:Wait()
+		TweenService:Create(b, TweenInfo.new(0.16, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 160, 0, 38)}):Play()
+	end)
+	return b
+end
+
+-- MAIN PAGE CONTENT
+do
+	local title = Instance.new("TextLabel", mainPage)
+	title.Size = UDim2.new(1, 0, 0, 26)
+	title.Position = UDim2.new(0, 0, 0, 0)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 16
+	title.Text = "Main — Safe quick actions"
+	title.TextColor3 = Color3.fromRGB(230,230,246)
+
+	local row1 = Instance.new("Frame", mainPage)
+	row1.Size = UDim2.new(1, 0, 0, 56)
+	row1.Position = UDim2.new(0, 0, 0, 36)
+	row1.BackgroundTransparency = 1
+
+	local b1 = actionButton(row1, "TP to Base (visual only)", false)
+	b1.Position = UDim2.new(0, 0, 0, 0)
+	b1.MouseButton1Click:Connect(function()
+		-- purely visual warp effect
+		local warp = Instance.new("Frame", ScreenGui)
+		warp.Size = UDim2.new(0, 220, 0, 220)
+		warp.Position = UDim2.new(0.5, -110, 0.5, -110)
+		warp.BackgroundTransparency = 0
+		warp.BackgroundColor3 = Color3.fromRGB(20,20,30)
+		warp.ZIndex = 900
+		local wcorner = Instance.new("UICorner", warp); wcorner.CornerRadius = UDim.new(1, 0)
+		local grad = Instance.new("UIGradient", warp)
+		grad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(127,227,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(155,107,255))})
+		TweenService:Create(warp, TweenInfo.new(0.6, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 420, 0, 420), BackgroundTransparency = 1}):Play()
+		delay(0.7, function() warp:Destroy() end)
+		showNotif("Teleport visual: TP to Base (local only)")
+	end)
+
+	local b2 = actionButton(row1, "Simulate Steal (demo)", true)
+	b2.Position = UDim2.new(0, 168, 0, 0)
+	b2.MouseButton1Click:Connect(function()
+		-- confetti + toast
+		local function spawnConfetti()
+			local layer = Instance.new("Frame", ScreenGui)
+			layer.Size = UDim2.new(1,0,1,0)
+			layer.BackgroundTransparency = 1
+			layer.ZIndex = 800
+			for i=1,30 do
+				local piece = Instance.new("Frame", layer)
+				piece.Size = UDim2.new(0, 8, 0, 14)
+				piece.Position = UDim2.new(math.random(), 0, -0.1, 0)
+				piece.BackgroundColor3 = ({Color3.fromRGB(127,227,255), Color3.fromRGB(155,107,255), Color3.fromRGB(255,107,179), Color3.fromRGB(255,122,92)})[math.random(1,4)]
+				piece.BorderSizePixel = 0
+				local pc = Instance.new("UICorner", piece); pc.CornerRadius = UDim.new(0,2)
+				local targetY = 1 + math.random() * 0.6
+				local targetX = math.random()
+				local tw = TweenService:Create(piece, TweenInfo.new(1 + math.random()*0.8, Enum.EasingStyle.Quad), {Position = UDim2.new(targetX, 0, targetY, 0), Rotation = 360*math.random()})
+				tw:Play()
+				spawn(function()
+					wait(1.6)
+					piece:Destroy()
+				end)
+			end
+			delay(2, function() if layer then layer:Destroy() end end)
+		end
+		spawnConfetti()
+		showNotif("Simulated steal animation (local demo).")
+	end)
+
+	local b3 = actionButton(row1, "Server Hop (visual)", false)
+	b3.Position = UDim2.new(0, 336, 0, 0)
+	b3.MouseButton1Click:Connect(function()
+		-- spinner overlay
+		local box = Instance.new("Frame", ScreenGui)
+		box.Size = UDim2.new(0, 140, 0, 120)
+		box.Position = UDim2.new(0.5, -70, 0.5, -60)
+		box.BackgroundColor3 = Color3.fromRGB(6,6,10)
+		box.ZIndex = 900
+		box.BorderSizePixel = 0
+		local corner = Instance.new("UICorner", box); corner.CornerRadius = UDim.new(0, 10)
+		local label = Instance.new("TextLabel", box)
+		label.Size = UDim2.new(1,0,0,40)
+		label.Position = UDim2.new(0, 0, 0, 10)
+		label.BackgroundTransparency = 1
+		label.Text = "Server Hop"
+		label.Font = Enum.Font.GothamBold
+		label.TextColor3 = Color3.fromRGB(238,238,243)
+		label.TextSize = 14
+		local spinner = Instance.new("Frame", box)
+		spinner.Size = UDim2.new(0, 48, 0, 48)
+		spinner.Position = UDim2.new(0.5, -24, 0, 52)
+		spinner.BackgroundColor3 = Color3.fromRGB(30,30,40)
+		local sc = Instance.new("UICorner", spinner); sc.CornerRadius = UDim.new(0, 24)
+		spawn(function()
+			for i=1,20 do
+				if box.Parent == nil then break end
+				spinner.Rotation = spinner.Rotation + 360/3
+				wait(0.08)
+			end
+			if box then box:Destroy() end
+			showNotif("Server hop simulation complete (local only)")
+		end)
+	end)
+end
+
+-- VISUALS PAGE
+do
+	local title = Instance.new("TextLabel", visualsPage)
+	title.Size = UDim2.new(1, 0, 0, 26)
+	title.Position = UDim2.new(0, 0, 0, 0)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 16
+	title.Text = "Visuals — themes & backgrounds"
+	title.TextColor3 = Color3.fromRGB(230,230,246)
+
+	-- theme shortcuts
+	local themesFrame = Instance.new("Frame", visualsPage)
+	themesFrame.Size = UDim2.new(1,0,0,40)
+	themesFrame.Position = UDim2.new(0,0,0,34)
+	themesFrame.BackgroundTransparency = 1
+
+	local themeNames = {
+		{Color3.fromRGB(127,227,255), Color3.fromRGB(155,107,255)},
+		{Color3.fromRGB(183,142,255), Color3.fromRGB(127,227,255)},
+		{Color3.fromRGB(255,155,206), Color3.fromRGB(255,107,179)}
+	}
+	for i, tcol in ipairs(themeNames) do
+		local btn = Instance.new("TextButton", themesFrame)
+		btn.Size = UDim2.new(0, 120, 0, 34)
+		btn.Position = UDim2.new(0, (i-1)*128, 0, 0)
+		btn.Text = "Theme "..i
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 14
+		btn.TextColor3 = Color3.fromRGB(5,3,10)
+		btn.BackgroundColor3 = tcol[1]
+		local corner = Instance.new("UICorner", btn)
+		corner.CornerRadius = UDim.new(0,8)
+		btn.MouseButton1Click:Connect(function()
+			-- apply theme tint to panel background & pfp if no decal
+			TweenService:Create(Panel, TweenInfo.new(0.32), {BackgroundColor3 = Color3.fromRGB(14,12,20) }):Play()
+			if not MAIN_PFP_DECAL then
+				TweenService:Create(Pfp, TweenInfo.new(0.28), {BackgroundColor3 = tcol[2]}):Play()
+			end
+			showNotif("Theme applied")
+		end)
+	end
+
+	-- background thumbnails
+	local bgTitle = Instance.new("TextLabel", visualsPage)
+	bgTitle.Position = UDim2.new(0, 0, 0, 86)
+	bgTitle.Size = UDim2.new(1, 0, 0, 22)
+	bgTitle.BackgroundTransparency = 1
+	bgTitle.Font = Enum.Font.GothamBold
+	bgTitle.Text = "Backgrounds (replace BG_DECAL_IDS with your decal IDs)"
+	bgTitle.TextSize = 13
+	bgTitle.TextColor3 = Color3.fromRGB(230,230,246)
+
+	local thumbsFrame = Instance.new("Frame", visualsPage)
+	thumbsFrame.Position = UDim2.new(0, 0, 0, 114)
+	thumbsFrame.Size = UDim2.new(1, 0, 0, 92)
+	thumbsFrame.BackgroundTransparency = 1
+
+	local function applyBackgroundById(id)
+		if not id or type(id) ~= "number" then
+			showNotif("Background asset ID missing — upload decal and edit script.")
+			return
+		end
+		bgOverlay.Image = "rbxassetid://"..tostring(id)
+		bgOverlay.Visible = true
+		showNotif("Background applied (local overlay)")
+	end
+	local function clearBackground()
+		bgOverlay.Visible = false
+		bgOverlay.Image = ""
+		showNotif("Background cleared")
+	end
+
+	-- create up to 3 thumbs (based on BG_DECAL_IDS)
+	for i=1,3 do
+		local thumb = Instance.new("ImageButton", thumbsFrame)
+		thumb.Size = UDim2.new(0, 92, 0, 72)
+		thumb.Position = UDim2.new(0, (i-1)*104, 0, 0)
+		thumb.BackgroundColor3 = Color3.fromRGB(30,30,34)
+		thumb.AutoButtonColor = false
+		local corner = Instance.new("UICorner", thumb); corner.CornerRadius = UDim.new(0, 8)
+		if BG_DECAL_IDS[i] and type(BG_DECAL_IDS[i]) == "number" then
+			thumb.Image = "rbxassetid://"..tostring(BG_DECAL_IDS[i])
+		else
+			-- placeholder visual
+			local label = Instance.new("TextLabel", thumb)
+			label.Size = UDim2.new(1,0,1,0)
+			label.BackgroundTransparency = 1
+			label.TextColor3 = Color3.fromRGB(238,238,243)
+			label.Font = Enum.Font.Gotham
+			label.TextSize = 12
+			label.Text = "Replace BG_DECAL_IDS["..i.."]\nwith uploaded asset ID"
+		end
+		thumb.MouseButton1Click:Connect(function()
+			if BG_DECAL_IDS[i] and type(BG_DECAL_IDS[i]) == "number" then
+				applyBackgroundById(BG_DECAL_IDS[i])
+			else
+				showNotif("No asset ID configured for this slot. Edit the script.")
+			end
+		end)
+	end
+
+	-- clear button
+	local clearBtn = Instance.new("TextButton", thumbsFrame)
+	clearBtn.Size = UDim2.new(0, 92, 0, 34)
+	clearBtn.Position = UDim2.new(0, 3*104, 0, 38)
+	clearBtn.Text = "Clear BG"
+	clearBtn.Font = Enum.Font.GothamBold
+	clearBtn.TextSize = 14
+	clearBtn.BackgroundColor3 = Color3.fromRGB(255,107,179)
+	local ccorner = Instance.new("UICorner", clearBtn); ccorner.CornerRadius = UDim.new(0,8)
+	clearBtn.MouseButton1Click:Connect(clearBackground)
+end
+
+-- AUDIO PAGE
+local ambientContainer = nil
+do
+	local title = Instance.new("TextLabel", audioPage)
+	title.Size = UDim2.new(1, 0, 0, 26)
+	title.Position = UDim2.new(0, 0, 0, 0)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 16
+	title.Text = "Audio — ambient (client-only)"
+	title.TextColor3 = Color3.fromRGB(230,230,246)
+
+	local playBtn = Instance.new("TextButton", audioPage)
+	playBtn.Size = UDim2.new(0, 160, 0, 36)
+	playBtn.Position = UDim2.new(0, 0, 0, 40)
+	playBtn.Text = "Play Ambient"
+	playBtn.Font = Enum.Font.GothamBold
+	playBtn.TextSize = 14
+	playBtn.BackgroundColor3 = Color3.fromRGB(123,107,255)
+	local pc = Instance.new("UICorner", playBtn); pc.CornerRadius = UDim.new(0,8)
+
+	local stopBtn = Instance.new("TextButton", audioPage)
+	stopBtn.Size = UDim2.new(0, 160, 0, 36)
+	stopBtn.Position = UDim2.new(0, 168, 0, 40)
+	stopBtn.Text = "Stop Ambient"
+	stopBtn.Font = Enum.Font.GothamBold
+	stopBtn.TextSize = 14
+	stopBtn.BackgroundColor3 = Color3.fromRGB(255,107,179)
+	local sc = Instance.new("UICorner", stopBtn); sc.CornerRadius = UDim.new(0,8)
+
+	local volLabel = Instance.new("TextLabel", audioPage)
+	volLabel.Size = UDim2.new(0, 60, 0, 20)
+	volLabel.Position = UDim2.new(0, 0, 0, 92)
+	volLabel.BackgroundTransparency = 1
+	volLabel.Text = "Volume"
+	volLabel.TextColor3 = Color3.fromRGB(238,238,243)
+	volLabel.Font = Enum.Font.Gotham
+	volLabel.TextSize = 13
+
+	-- simple slider
+	local slider = Instance.new("Frame", audioPage)
+	slider.Size = UDim2.new(0, 280, 0, 12)
+	slider.Position = UDim2.new(0, 66, 0, 96)
+	slider.BackgroundColor3 = Color3.fromRGB(40,40,44)
+	local sCorner = Instance.new("UICorner", slider); sCorner.CornerRadius = UDim.new(0,8)
+	local knob = Instance.new("Frame", slider)
+	knob.Size = UDim2.new(0, 16, 0, 16)
+	knob.Position = UDim2.new(0.6, -8, 0.5, -8)
+	knob.BackgroundColor3 = Color3.fromRGB(127,227,255)
+	local kCorner = Instance.new("UICorner", knob); kCorner.CornerRadius = UDim.new(1,0)
+
+	local dragging = false
+	local function setVolumeFromKnob()
+		local rel = math.clamp((knob.Position.X.Offset + 8) / (slider.AbsoluteSize.X), 0, 1)
+		-- apply to any playing sounds
+		if ambientContainer then
+			for _, s in ipairs(ambientContainer:GetChildren()) do
+				if s:IsA("Sound") then s.Volume = rel end
+			end
+		end
+		-- store
+		pcall(function() player:SetAttribute("Karker_Volume", rel) end)
+	end
+
+	knob.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+	knob.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+	slider.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			local x = math.clamp(input.Position.X - slider.AbsolutePosition.X, 0, slider.AbsoluteSize.X)
+			knob.Position = UDim2.new(0, x - 8, 0.5, -8)
+			setVolumeFromKnob()
+		end
+	end)
+	RunService.Heartbeat:Connect(function()
+		if dragging then
+			local mouse = player:GetMouse()
+			local x = math.clamp(mouse.X - slider.AbsolutePosition.X, 0, slider.AbsoluteSize.X)
+			knob.Position = UDim2.new(0, x - 8, 0.5, -8)
+			setVolumeFromKnob()
+		end
+	end)
+
+	-- Ambient start / stop
+	local function startAmbient()
+		if ambientContainer then return end
+		ambientContainer = Instance.new("Folder", ScreenGui)
+		ambientContainer.Name = "AmbientSounds"
+		local vol = player:GetAttribute("Karker_Volume") or 0.6
+
+		-- Create one or two looped Sound objects (replace IDs)
+		for i, id in ipairs(AMBIENT_SOUND_IDS) do
+			if type(id) == "number" then
+				local s = Instance.new("Sound", ambientContainer)
+				s.Name = "Ambient_"..i
+				s.SoundId = "rbxassetid://"..tostring(id)
+				s.Looped = true
+				s.Volume = vol
+				s.RollOffMode = Enum.RollOffMode.InverseTapered
+				s:Play()
+			end
+		end
+		showNotif("Ambient started (client-only)")
+	end
+	local function stopAmbient()
+		if ambientContainer then
+			ambientContainer:Destroy()
+			ambientContainer = nil
+		end
+		showNotif("Ambient stopped")
+	end
+
+	playBtn.MouseButton1Click:Connect(startAmbient)
+	stopBtn.MouseButton1Click:Connect(stopAmbient)
+end
+
+-- ABOUT PAGE
+do
+	local label = Instance.new("TextLabel", aboutPage)
+	label.Size = UDim2.new(1,0,1,0)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 14
+	label.TextColor3 = Color3.fromRGB(238,238,243)
+	label.TextWrapped = true
+	label.Text = "Karker UI (Roblox port) — cosmetic-only demo. No cheating or exploit code included. Replace BG_DECAL_IDS and AMBIENT_SOUND_IDS in the script with your uploaded asset IDs to enable backgrounds and ambient audio."
+end
+
+-- Tab switching logic
+local function SetActiveTab(name)
+	for k, v in pairs(Pages) do
+		v.Visible = (k == name)
+	end
+	for n, btn in pairs(tabButtons) do
+		if n == name then
+			TweenService:Create(btn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(127,227,255)}):Play()
+			btn.TextColor3 = Color3.fromRGB(5,3,10)
+		else
+			TweenService:Create(btn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(40,40,44)}):Play()
+			btn.TextColor3 = Color3.fromRGB(238,238,243)
+		end
+	end
+end
+
+-- wire tab clicks
+for name, btn in pairs(tabButtons) do
+	btn.MouseButton1Click:Connect(function() SetActiveTab(name) end)
+end
+SetActiveTab("Main")
+
+-- minimize button
+local minimized = false
+MinBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	if minimized then
+		TweenService:Create(Panel, TweenInfo.new(0.24), {Size = UDim2.new(0, 220, 0, 48)}):Play()
+		showNotif("GUI minimized")
+	else
+		TweenService:Create(Panel, TweenInfo.new(0.28), {Size = UDim2.new(0, 480, 0, 340)}):Play()
+		showNotif("GUI restored")
+	end
+end)
+
+-- expose some useful functions to player (client-side only)
+player:SetAttribute("KarkerUI_Present", true)
+
+-- done
+showNotif("Karker UI loaded — cosmetic-only demo")
+
+-- Notes for you:
+-- 1) To use your GIFs as backgrounds, upload them to Roblox (Decal or Video) and set BG_DECAL_IDS in this script to the uploaded asset numbers.
+-- 2) To have ambient audio, upload audio files and set AMBIENT_SOUND_IDS to their IDs.
+-- 3) This LocalScript intentionally does not manipulate the server or other players. All actions are local visuals only.
+
