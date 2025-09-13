@@ -1,0 +1,734 @@
+-- Karker Hub v3.2 "Special Sauce" -- Full upgrade
+-- LocalScript (StarterPlayerScripts or StarterGui)
+-- Author: YOUNG (improved)
+-- Notes:
+--  * SpecialSauce does local visuals + local push. To actually affect other players server-side you'd need a server script (see comment).
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local guiParent = player:WaitForChild("PlayerGui")
+
+-- ---------- UTIL ----------
+local function tween(obj, t, props, style, dir)
+    TweenService:Create(obj, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
+end
+local function newUICorner(parent, radius) local c = Instance.new("UICorner", parent); c.CornerRadius = UDim.new(0, radius or 8); return c end
+local function newStroke(parent, color, thickness) local s = Instance.new("UIStroke", parent); s.Color = color or Color3.fromRGB(30,30,30); s.Thickness = thickness or 1; return s end
+
+local function safeWait(t) if t and t>0 then task.wait(t) end end
+
+-- ---------- NOTIFICATIONS (bottom-left stack) ----------
+local notifGui = Instance.new("ScreenGui", guiParent)
+notifGui.Name = "KH_Notifs"
+notifGui.ResetOnSpawn = false
+local notifHolder = Instance.new("Frame", notifGui)
+notifHolder.Size = UDim2.new(0, 340, 0, 260)
+notifHolder.Position = UDim2.new(0, 16, 1, -16)
+notifHolder.AnchorPoint = Vector2.new(0,1)
+notifHolder.BackgroundTransparency = 1
+local notifList = {}
+
+local function sendNotification(title, text, duration)
+    duration = duration or 4
+    local f = Instance.new("Frame", notifHolder)
+    f.Size = UDim2.new(1,0,0,0)
+    f.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    f.BorderSizePixel = 0
+    newUICorner(f, 10)
+    newStroke(f, Color3.fromRGB(40,40,40), 1)
+
+    local tlabel = Instance.new("TextLabel", f)
+    tlabel.Size = UDim2.new(1, -12, 0, 20)
+    tlabel.Position = UDim2.new(0,6,0,6)
+    tlabel.BackgroundTransparency = 1
+    tlabel.Font = Enum.Font.GothamBold
+    tlabel.TextSize = 16
+    tlabel.TextColor3 = Color3.fromRGB(255,200,50)
+    tlabel.TextXAlignment = Enum.TextXAlignment.Left
+    tlabel.Text = title
+
+    local mlabel = Instance.new("TextLabel", f)
+    mlabel.Size = UDim2.new(1, -12, 0, 44)
+    mlabel.Position = UDim2.new(0,6,0,28)
+    mlabel.BackgroundTransparency = 1
+    mlabel.Font = Enum.Font.Gotham
+    mlabel.TextSize = 14
+    mlabel.TextColor3 = Color3.fromRGB(235,235,235)
+    mlabel.TextWrapped = true
+    mlabel.TextXAlignment = Enum.TextXAlignment.Left
+    mlabel.Text = text
+
+    -- expand into view
+    tween(f, 0.25, {Size = UDim2.new(1,0,0,80)})
+    table.insert(notifList, 1, f)
+    for i, v in ipairs(notifList) do
+        local y = -((i-1) * 86)
+        tween(v, 0.18, {Position = UDim2.new(0,0,1,y)})
+    end
+
+    task.delay(duration, function()
+        tween(f, 0.18, {Size = UDim2.new(1,0,0,0)})
+        task.wait(0.22)
+        for i,v in ipairs(notifList) do
+            if v == f then table.remove(notifList, i); break end
+        end
+        f:Destroy()
+        for i, v in ipairs(notifList) do
+            local y = -((i-1) * 86)
+            tween(v, 0.16, {Position = UDim2.new(0,0,1,y)})
+        end
+    end)
+end
+
+-- ---------- FULLSCREEN LOADING (covers whole screen) ----------
+local loadingGui = Instance.new("ScreenGui", guiParent)
+loadingGui.Name = "KH_Loading"
+loadingGui.ResetOnSpawn = false
+
+local loadingBG = Instance.new("Frame", loadingGui)
+loadingBG.Size = UDim2.new(1,0,1,0)
+loadingBG.Position = UDim2.new(0,0,0,0)
+loadingBG.BackgroundColor3 = Color3.fromRGB(10,10,14)
+loadingBG.BorderSizePixel = 0
+
+-- cinematic vignette
+local vignette = Instance.new("ImageLabel", loadingBG)
+vignette.Size = UDim2.new(1.4,0,1.4,0)
+vignette.Position = UDim2.new(-0.2,0,-0.2,0)
+vignette.Image = "rbxassetid://5058094581" -- subtle vignette (fallback)
+vignette.BackgroundTransparency = 1
+vignette.ImageTransparency = 0.5
+vignette.ScaleType = Enum.ScaleType.Crop
+
+-- snow effect (particles parented to a part)
+local snowPart = Instance.new("Part")
+snowPart.Anchored = true
+snowPart.CanCollide = false
+snowPart.Size = Vector3.new(200,1,200)
+snowPart.Position = workspace.CurrentCamera and workspace.CurrentCamera.CFrame.p or Vector3.new(0,1000,0)
+snowPart.Transparency = 1
+snowPart.Parent = workspace
+local snowEmitter = Instance.new("ParticleEmitter", snowPart)
+snowEmitter.Texture = "rbxassetid://241594314" -- small snow texture
+snowEmitter.Rate = 40
+snowEmitter.Lifetime = NumberRange.new(4,8)
+snowEmitter.Speed = NumberRange.new(2,6)
+snowEmitter.Size = NumberSequence.new(0.8)
+snowEmitter.VelocitySpread = 180
+snowEmitter.Parent = snowPart
+
+-- loading title & cinematic underline
+local loadTitle = Instance.new("TextLabel", loadingBG)
+loadTitle.Size = UDim2.new(1,0,0,80)
+loadTitle.Position = UDim2.new(0,0,0.42,0)
+loadTitle.BackgroundTransparency = 1
+loadTitle.Font = Enum.Font.GothamBlack
+loadTitle.TextSize = 28
+loadTitle.TextColor3 = Color3.fromRGB(255,255,255)
+loadTitle.Text = ""
+
+-- typewriter message
+task.spawn(function()
+    local msg = "KARKER HUB LOADING... sit tight..."
+    for i = 1, #msg do
+        loadTitle.Text = msg:sub(1,i)
+        task.wait(0.03)
+    end
+    task.wait(1.1)
+    tween(loadingBG, 0.9, {BackgroundTransparency = 1})
+    for _,c in ipairs(loadingBG:GetChildren()) do
+        if c:IsA("GuiObject") then tween(c, 0.9, {ImageTransparency = 1, TextTransparency = 1}) end
+    end
+    task.wait(1.1)
+    if snowPart and snowPart.Parent then snowPart:Destroy() end
+    loadingGui:Destroy()
+end)
+
+-- ensure snow follows camera so it looks full-screen
+RunService:BindToRenderStep("KH_SnowFollow", Enum.RenderPriority.Camera.Value + 1, function()
+    if snowPart and workspace.CurrentCamera then
+        snowPart.CFrame = workspace.CurrentCamera.CFrame * CFrame.new(0, -15, -10)
+    end
+end)
+
+-- ---------- MAIN GUI (draggable header + scrolling + slick buttons) ----------
+local mainGui = Instance.new("ScreenGui", guiParent)
+mainGui.Name = "KarkerHub_Main"
+mainGui.ResetOnSpawn = false
+
+local window = Instance.new("Frame", mainGui)
+window.Size = UDim2.new(0, 520, 0, 420)
+window.Position = UDim2.new(0.5, -260, 1.2, 0) -- slide in from bottom
+window.AnchorPoint = Vector2.new(0.5, 0.5)
+window.BackgroundColor3 = Color3.fromRGB(18,18,18)
+newUICorner(window, 16)
+newStroke(window, Color3.fromRGB(30,30,30), 1)
+
+-- header (draggable)
+local header = Instance.new("Frame", window)
+header.Size = UDim2.new(1, 0, 0, 56)
+header.Position = UDim2.new(0,0,0,0)
+header.BackgroundTransparency = 1
+
+local hubLogo = Instance.new("TextLabel", header)
+hubLogo.Size = UDim2.new(0.6, 0, 1, 0)
+hubLogo.Position = UDim2.new(0.04, 0, 0, 0)
+hubLogo.BackgroundTransparency = 1
+hubLogo.Font = Enum.Font.GothamBlack
+hubLogo.TextSize = 20
+hubLogo.TextColor3 = Color3.fromRGB(255,255,255)
+hubLogo.Text = "Karker Hub"
+
+local subtitle = Instance.new("TextLabel", header)
+subtitle.Size = UDim2.new(0.3, 0, 1, 0)
+subtitle.Position = UDim2.new(0.64, 0, 0, 0)
+subtitle.BackgroundTransparency = 1
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextSize = 12
+subtitle.TextColor3 = Color3.fromRGB(180,180,180)
+subtitle.TextXAlignment = Enum.TextXAlignment.Right
+subtitle.Text = "v3.2"
+
+-- close / minimize
+local closeBtn = Instance.new("TextButton", header)
+closeBtn.Size = UDim2.new(0, 36, 0, 30)
+closeBtn.Position = UDim2.new(1, -44, 0.12, 0)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 16
+closeBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+newUICorner(closeBtn, 8)
+newStroke(closeBtn, Color3.fromRGB(25,25,25), 1)
+
+local minBtn = Instance.new("TextButton", header)
+minBtn.Size = UDim2.new(0, 36, 0, 30)
+minBtn.Position = UDim2.new(1, -92, 0.12, 0)
+minBtn.Text = "_"
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 18
+minBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+newUICorner(minBtn, 8)
+newStroke(minBtn, Color3.fromRGB(25,25,25), 1)
+
+-- make window draggable (roblox Draggable is legacy — implement custom)
+do
+    local dragging, dragStart, startPos
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = window.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    header.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if dragging and dragStart and startPos then
+                local delta = input.Position - dragStart
+                window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end
+    end)
+end
+
+-- content
+local contentHolder = Instance.new("Frame", window)
+contentHolder.Size = UDim2.new(1, -28, 1, -96)
+contentHolder.Position = UDim2.new(0, 14, 0, 72)
+contentHolder.BackgroundTransparency = 1
+
+local scroll = Instance.new("ScrollingFrame", contentHolder)
+scroll.Size = UDim2.new(1,0,1,0)
+scroll.CanvasSize = UDim2.new(0,0,0,800)
+scroll.ScrollBarThickness = 8
+scroll.BackgroundTransparency = 1
+local list = Instance.new("UIListLayout", scroll)
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Padding = UDim.new(0, 12)
+
+-- pretty footer / credits
+local footer = Instance.new("TextLabel", window)
+footer.Size = UDim2.new(1, -24, 0, 28)
+footer.Position = UDim2.new(0, 12, 1, -36)
+footer.BackgroundTransparency = 1
+footer.Font = Enum.Font.Gotham
+footer.TextSize = 12
+footer.TextColor3 = Color3.fromRGB(140,140,140)
+footer.Text = "Created by YOUNG — improved"
+
+-- button factory (nice animations + ripple)
+local function makeButton(label, callback)
+    local outer = Instance.new("Frame", scroll)
+    outer.Size = UDim2.new(1,0,0,62)
+    outer.BackgroundTransparency = 1
+
+    local btn = Instance.new("TextButton", outer)
+    btn.Size = UDim2.new(0.96, 0, 0, 56)
+    btn.Position = UDim2.new(0.02, 0, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(36,36,36)
+    btn.Text = label
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 16
+    btn.TextColor3 = Color3.fromRGB(245,245,245)
+    newUICorner(btn, 10)
+    newStroke(btn, Color3.fromRGB(28,28,28), 1)
+    btn.AutoButtonColor = false
+
+    btn.MouseEnter:Connect(function() tween(btn, 0.16, {BackgroundColor3 = Color3.fromRGB(58,58,58), Size = UDim2.new(0.965,0,0,58)}) end)
+    btn.MouseLeave:Connect(function() tween(btn, 0.16, {BackgroundColor3 = Color3.fromRGB(36,36,36), Size = UDim2.new(0.96,0,0,56)}) end)
+    btn.MouseButton1Down:Connect(function() tween(btn, 0.06, {Size = UDim2.new(0.94,0,0,54)}) end)
+    btn.MouseButton1Up:Connect(function() tween(btn, 0.08, {Size = UDim2.new(0.96,0,0,56)}) end)
+    btn.MouseButton1Click:Connect(function()
+        tween(btn, 0.12, {Size = UDim2.new(1,0,0,60)})
+        task.delay(0.12, function() tween(btn, 0.12, {Size = UDim2.new(0.96,0,0,56)}) end)
+        pcall(callback)
+    end)
+    return btn
+end
+
+-- ---------- FLOAT (bypassable) ----------
+local floatEnabled = false
+local bypassFloat = false -- if true, the float is bypassed/disallowed
+local floatData = {}
+
+local function enableFloat()
+    if floatEnabled or bypassFloat then
+        sendNotification("Float", bypassFloat and "Float is currently bypassed." or "Float already enabled.", 3)
+        return
+    end
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then sendNotification("Float", "Character not ready.", 3); return end
+
+    -- vectorforce on HRP for partial gravity compensation (local)
+    local att = Instance.new("Attachment", hrp); att.Name = "KH_FloatAttach"
+    local vf = Instance.new("VectorForce", hrp)
+    vf.Attachment0 = att
+    vf.RelativeTo = Enum.ActuatorRelativeTo.World
+    local mass = hrp:GetMass()
+    local factor = 0.55
+    vf.Force = Vector3.new(0, mass * 196.2 * factor, 0)
+    vf.Name = "KH_VectorForce"
+
+    floatData = {vf = vf, att = att}
+    floatEnabled = true
+    sendNotification("Float", "Float enabled (you can still jump).", 3)
+end
+
+local function disableFloat()
+    if floatData.vf then pcall(function() floatData.vf:Destroy() end) end
+    if floatData.att then pcall(function() floatData.att:Destroy() end) end
+    floatData = {}
+    floatEnabled = false
+    sendNotification("Float", "Float disabled.", 2)
+end
+
+-- bypass toggle
+local function setBypass(state)
+    bypassFloat = state and true or false
+    if bypassFloat then
+        disableFloat()
+        sendNotification("Bypass Float", "Float has been bypassed (disabled).", 3)
+    else
+        sendNotification("Bypass Float", "Float bypass removed. You can enable float again.", 3)
+    end
+end
+
+-- ---------- INVISIBLE RAMP (optional physical support) ----------
+local invisibleRamp = nil
+local function createInvisibleRamp()
+    if invisibleRamp and invisibleRamp.Parent then return invisibleRamp end
+    local p = Instance.new("Part", workspace)
+    p.Size = Vector3.new(6,1,6)
+    p.Anchored = true
+    p.CanCollide = true
+    p.Transparency = 1
+    p.Name = "KH_Invisible_Ramp"
+    invisibleRamp = p
+    return p
+end
+local function destroyInvisibleRamp()
+    if invisibleRamp then invisibleRamp:Destroy(); invisibleRamp = nil end
+end
+
+-- ---------- THROW AURA (burst) ----------
+local function throwAura()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then sendNotification("Aura", "Character not ready.", 2); return end
+
+    local emitter = Instance.new("ParticleEmitter")
+    emitter.Texture = "rbxassetid://243660277"
+    emitter.Speed = NumberRange.new(8, 14)
+    emitter.Lifetime = NumberRange.new(0.4, 0.9)
+    emitter.Rate = 0
+    emitter.Size = NumberSequence.new(0.6)
+    emitter.Color = ColorSequence.new(Color3.fromRGB(200,100,255))
+    emitter.Parent = hrp
+    emitter:Emit(55)
+    Debris:AddItem(emitter, 1.2)
+
+    -- local push to the player (small)
+    local bv = Instance.new("BodyVelocity", hrp)
+    bv.MaxForce = Vector3.new(2000, 2000, 2000)
+    bv.Velocity = hrp.CFrame.LookVector * 18 + Vector3.new(0, 8, 0)
+    Debris:AddItem(bv, 0.28)
+
+    sendNotification("Throw Aura", "Aura thrown!", 2)
+end
+
+-- ---------- SPECIAL SAUCE (circle aura + fire + auto-taser local visuals) ----------
+local specialActive = false
+local specialRegion = nil
+local specialConnections = {}
+local specialRadius = 24 -- studs
+local specialNotifyDuration = 3
+
+-- UI modal for private server input
+local modal = Instance.new("Frame", mainGui)
+modal.Visible = false
+modal.Size = UDim2.new(0,380,0,180)
+modal.Position = UDim2.new(0.5, -190, 0.5, -90)
+modal.AnchorPoint = Vector2.new(0.5,0.5)
+modal.BackgroundColor3 = Color3.fromRGB(20,20,20)
+newUICorner(modal, 10)
+newStroke(modal, Color3.fromRGB(35,35,35), 1)
+
+local modalTitle = Instance.new("TextLabel", modal)
+modalTitle.Size = UDim2.new(1, -24, 0, 28)
+modalTitle.Position = UDim2.new(0,12,0,10)
+modalTitle.BackgroundTransparency = 1
+modalTitle.Font = Enum.Font.GothamBold
+modalTitle.TextSize = 16
+modalTitle.Text = "Private Server (optional)"
+modalTitle.TextColor3 = Color3.fromRGB(255,255,255)
+
+local modalDesc = Instance.new("TextLabel", modal)
+modalDesc.Size = UDim2.new(1, -24, 0, 36)
+modalDesc.Position = UDim2.new(0,12,0,40)
+modalDesc.BackgroundTransparency = 1
+modalDesc.Font = Enum.Font.Gotham
+modalDesc.TextSize = 13
+modalDesc.TextColor3 = Color3.fromRGB(190,190,190)
+modalDesc.TextWrapped = true
+modalDesc.Text = "Paste a private server instance ID (or leave blank). After grabbing the item you can choose to join it."
+
+local inputBox = Instance.new("TextBox", modal)
+inputBox.Size = UDim2.new(1, -24, 0, 36)
+inputBox.Position = UDim2.new(0,12,0,84)
+inputBox.Text = ""
+inputBox.PlaceholderText = "Paste private server instance ID (e.g. abc123...)"
+inputBox.Font = Enum.Font.Gotham
+inputBox.TextSize = 14
+inputBox.BackgroundColor3 = Color3.fromRGB(28,28,28)
+newUICorner(inputBox, 8)
+newStroke(inputBox, Color3.fromRGB(25,25,25), 1)
+
+local modalButtons = Instance.new("Frame", modal)
+modalButtons.Size = UDim2.new(1, -24, 0, 32)
+modalButtons.Position = UDim2.new(0,12,0,132)
+modalButtons.BackgroundTransparency = 1
+
+local stayBtn = Instance.new("TextButton", modalButtons)
+stayBtn.Size = UDim2.new(0.5, -8, 1, 0)
+stayBtn.Position = UDim2.new(0, 0, 0, 0)
+stayBtn.Text = "Stay"
+stayBtn.Font = Enum.Font.GothamBold
+stayBtn.TextSize = 14
+stayBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+newUICorner(stayBtn, 8)
+newStroke(stayBtn, Color3.fromRGB(25,25,25), 1)
+
+local goBtn = Instance.new("TextButton", modalButtons)
+goBtn.Size = UDim2.new(0.5, -8, 1, 0)
+goBtn.Position = UDim2.new(0.5, 8, 0, 0)
+goBtn.Text = "Join Private Server"
+goBtn.Font = Enum.Font.GothamBold
+goBtn.TextSize = 14
+goBtn.BackgroundColor3 = Color3.fromRGB(50,90,200)
+newUICorner(goBtn, 8)
+newStroke(goBtn, Color3.fromRGB(25,25,25), 1)
+
+local chosenPrivate = nil
+stayBtn.MouseButton1Click:Connect(function()
+    modal.Visible = false
+    chosenPrivate = nil
+    sendNotification("Special Sauce", "You chose to stay in this server.", 3)
+end)
+goBtn.MouseButton1Click:Connect(function()
+    chosenPrivate = inputBox.Text ~= "" and inputBox.Text or nil
+    modal.Visible = false
+    if chosenPrivate then
+        sendNotification("Special Sauce", "Private server saved. Will ask to teleport after grabbing.", 3)
+    else
+        sendNotification("Special Sauce", "No private ID entered. Staying in server.", 3)
+    end
+end)
+
+-- function to create aura visuals and start scanning for players
+local function startSpecialSauce()
+    if specialActive then return end
+    specialActive = true
+
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then sendNotification("Special Sauce", "Character not ready.", 2); specialActive=false; return end
+
+    -- big flaming aura (local particle ring + light)
+    local auraPart = Instance.new("Part", hrp)
+    auraPart.Name = "KH_Special_Aura"
+    auraPart.Anchored = true
+    auraPart.CanCollide = false
+    auraPart.Size = Vector3.new(specialRadius*2 + 6, 1, specialRadius*2 + 6)
+    auraPart.Transparency = 1
+    auraPart.CFrame = hrp.CFrame * CFrame.new(0, -3.5, 0)
+    auraPart.Parent = workspace
+
+    local ring = Instance.new("ParticleEmitter", auraPart)
+    ring.Texture = "rbxassetid://296874371" -- flame-ish sprite
+    ring.Rate = 45
+    ring.Speed = NumberRange.new(0.8,2.2)
+    ring.Lifetime = NumberRange.new(0.6,1.4)
+    ring.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,2.2), NumberSequenceKeypoint.new(1,0)})
+    ring.Color = ColorSequence.new(Color3.fromRGB(255,140,30), Color3.fromRGB(255,60,20))
+    ring.Rotation = NumberRange.new(0,360)
+    ring.EmissionDirection = Enum.NormalId.Top
+
+    local fireLight = Instance.new("PointLight", auraPart)
+    fireLight.Color = Color3.fromRGB(255, 160, 60)
+    fireLight.Brightness = 1.8
+    fireLight.Range = 20
+
+    -- big UI notification center-screen (fancy)
+    local bigNotif = Instance.new("TextLabel", mainGui)
+    bigNotif.Size = UDim2.new(0, 520, 0, 80)
+    bigNotif.Position = UDim2.new(0.5, -260, 0.12, 0)
+    bigNotif.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    newUICorner(bigNotif, 12)
+    newStroke(bigNotif, Color3.fromRGB(40,40,40), 1)
+    bigNotif.Font = Enum.Font.GothamBlack
+    bigNotif.TextSize = 22
+    bigNotif.TextColor3 = Color3.fromRGB(255,255,255)
+    bigNotif.Text = "huh I see u tryna steal lol"
+    bigNotif.TextWrapped = true
+    tween(bigNotif, 0.25, {Position = UDim2.new(0.5, -260, 0.06, 0)})
+    task.delay(1.6, function() tween(bigNotif, 0.28, {Position = UDim2.new(0.5, -260, -0.18, 0)}) end)
+    Debris:AddItem(bigNotif, 2.4)
+
+    -- small fire emitters around player as immediate visual
+    local flame = Instance.new("ParticleEmitter", hrp)
+    flame.Texture = "rbxassetid://243660277"
+    flame.Rate = 30
+    flame.Lifetime = NumberRange.new(0.9,1.5)
+    flame.Size = NumberSequence.new(1.2)
+    flame.Speed = NumberRange.new(0.3,1)
+    flame.Color = ColorSequence.new(Color3.fromRGB(255,120,40))
+    Debris:AddItem(flame, 8)
+
+    -- wait 2 seconds before auto-taser begins
+    task.wait(2)
+
+    sendNotification("Special Sauce", "Special system activated — scanning for intruders.", specialNotifyDuration)
+
+    -- scanning loop: every 0.25s check other player's distance
+    local lastTased = {} -- map player -> cooldown
+    local conn
+    conn = RunService.Heartbeat:Connect(function(dt)
+        if not specialActive then
+            conn:Disconnect()
+            return
+        end
+        -- keep auraPart under player
+        if auraPart and auraPart.Parent then
+            if hrp and hrp.Parent then
+                auraPart.CFrame = hrp.CFrame * CFrame.new(0, -3.5, 0)
+                fireLight.Range = math.clamp(specialRadius * 0.8, 12, 60)
+            end
+        end
+
+        for _, other in ipairs(Players:GetPlayers()) do
+            if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") and other.Character:FindFirstChildOfClass("Humanoid") then
+                local ohrp = other.Character.HumanoidRootPart
+                local dist = (ohrp.Position - hrp.Position).Magnitude
+                if dist <= specialRadius then
+                    -- cooldown per player
+                    local now = tick()
+                    if not lastTased[other] or (now - lastTased[other] > 4) then
+                        lastTased[other] = now
+                        -- local visual taser effect (on this client)
+                        -- spawn lightning bolt between hrp and other hrp
+                        local beam = Instance.new("Part", workspace)
+                        beam.Anchored = true
+                        beam.CanCollide = false
+                        beam.Material = Enum.Material.Neon
+                        beam.Color = Color3.fromRGB(120, 200, 255)
+                        beam.Size = Vector3.new(0.4,0.4,(ohrp.Position - hrp.Position).Magnitude)
+                        beam.CFrame = CFrame.new(hrp.Position, ohrp.Position) * CFrame.new(0,0,-beam.Size.Z/2) * CFrame.Angles(math.pi/2,0,0)
+                        Debris:AddItem(beam, 0.28)
+
+                        -- spark emitter at other player's HRP (local only)
+                        local spark = Instance.new("ParticleEmitter", ohrp)
+                        spark.Texture = "rbxassetid://256249139" -- spark
+                        spark.Rate = 0
+                        spark:Emit(40)
+                        Debris:AddItem(spark, 0.5)
+
+                        -- local push on local client's camera/character if we're the one being affected
+                        -- NOTE: client cannot reliably affect remote player's physical state; this is a local visual.
+                        -- But for local player (if testing multiple clients locally) we'll apply a small bounce if the other is us.
+                        if other == player then
+                            local bv = Instance.new("BodyVelocity", hrp)
+                            bv.MaxForce = Vector3.new(5000,5000,5000)
+                            bv.Velocity = (hrp.CFrame.LookVector * -10) + Vector3.new(0,8,0)
+                            Debris:AddItem(bv, 0.25)
+                        end
+
+                        -- small flash notif
+                        sendNotification("TASER", other.Name .. " triggered the aura! (local visual)", 2)
+
+                        -- If you want a server-side effect: replicate to server with RemoteEvent and have a server Script apply Humanoid state / damage / stun.
+                        -- e.g. RemoteEvent:FireServer("taser", other.UserId)
+                    end
+                end
+            end
+        end
+    end)
+
+    table.insert(specialConnections, conn)
+
+    -- cleanup function to stop special sauce
+    local function stopSpecial()
+        specialActive = false
+        for _, c in ipairs(specialConnections) do
+            if c and c.Disconnect then pcall(c.Disconnect, c) end
+        end
+        specialConnections = {}
+        if auraPart and auraPart.Parent then auraPart:Destroy() end
+        sendNotification("Special Sauce", "Special system stopped.", 2)
+    end
+
+    -- auto stop after 60 seconds to avoid permanent state (adjustable)
+    task.delay(60, function()
+        if specialActive then stopSpecial() end
+    end)
+
+    -- show modal so player can paste private server id and choose to stay or go AFTER grabbing
+    modal.Visible = true
+end
+
+-- ---------- BUTTONS (special sauce, float, throw, server hop, close) ----------
+makeButton("Special Sauce", function()
+    -- animate big pulse on window for effect
+    local pulse = Instance.new("Frame", window)
+    pulse.Size = UDim2.new(0, 0, 0, 0)
+    pulse.Position = UDim2.new(0.5, 0, 0.5, 0)
+    pulse.AnchorPoint = Vector2.new(0.5,0.5)
+    pulse.BackgroundColor3 = Color3.fromRGB(255, 95, 40)
+    pulse.BorderSizePixel = 0
+    newUICorner(pulse, 200)
+    pulse.ZIndex = 1000
+
+    tween(pulse, 0.45, {Size = UDim2.new(1.6,0,1.6,0), BackgroundTransparency = 0.6})
+    task.delay(0.45, function()
+        tween(pulse, 0.3, {BackgroundTransparency = 1, Size = UDim2.new(0,0,0,0)})
+        Debris:AddItem(pulse, 0.8)
+    end)
+
+    -- firey screen flare around camera
+    local camera = workspace.CurrentCamera
+    if camera then
+        local screenFlare = Instance.new("Frame", mainGui)
+        screenFlare.Size = UDim2.new(1.2,0,1.2,0)
+        screenFlare.Position = UDim2.new(-0.1,0,-0.12,0)
+        screenFlare.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        screenFlare.BackgroundTransparency = 0.9
+        screenFlare.ZIndex = 999
+        local img = Instance.new("ImageLabel", screenFlare)
+        img.Size = UDim2.new(1,0,1,0)
+        img.BackgroundTransparency = 1
+        img.Image = "rbxassetid://297001615" -- flame image (decor)
+        img.ImageTransparency = 0.25
+        Debris:AddItem(screenFlare, 3)
+    end
+
+    sendNotification("Special Sauce", "Preparing special system...", 2)
+    task.delay(0.25, function()
+        -- Big center-screen "huh i see u..." notif is shown in startSpecialSauce
+        startSpecialSauce()
+    end)
+end)
+
+makeButton("Toggle Float (Jumpable)", function()
+    if floatEnabled then disableFloat() else enableFloat() end
+end)
+
+makeButton("Bypass Float (Disable)", function()
+    setBypass(true)
+end)
+
+makeButton("Unbypass Float (Allow)", function()
+    setBypass(false)
+end)
+
+makeButton("Throw Aura", function() throwAura() end)
+
+makeButton("Server Hop (paste instance ID to join)", function()
+    -- open modal to paste instance id (reuse modal)
+    modal.Visible = true
+    inputBox.PlaceholderText = "Instance ID (required to join remote private instance)"
+end)
+
+makeButton("Close Hub", function()
+    tween(window, 0.45, {Position = UDim2.new(0.5, -260, 1.2, 0)})
+    task.delay(0.45, function() mainGui:Destroy() end)
+end)
+
+-- close/minimize behaviors
+closeBtn.MouseButton1Click:Connect(function()
+    mainGui:Destroy()
+end)
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        tween(contentHolder, 0.2, {Position = UDim2.new(0,14,0,72)})
+        tween(window, 0.28, {Size = UDim2.new(0,520,0,96)})
+    else
+        tween(window, 0.28, {Size = UDim2.new(0,520,0,420)})
+    end
+end)
+
+-- slide-in main window after loading
+task.delay(3.6, function()
+    tween(window, 0.6, {Position = UDim2.new(0.5, -260, 0.5, 0)}, Enum.EasingStyle.Quint)
+end)
+
+-- Ensure invisible ramp follows player (if created)
+RunService.Heartbeat:Connect(function()
+    local char = player.Character
+    if char and invisibleRamp and char:FindFirstChild("HumanoidRootPart") then
+        invisibleRamp.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, -3.2, 0)
+    end
+    -- protect float attachment if character resets
+    if floatEnabled and floatData.att and char and char:FindFirstChild("HumanoidRootPart") then
+        if floatData.att.Parent ~= char.HumanoidRootPart then
+            floatData.att.Parent = char.HumanoidRootPart
+        end
+    end
+end)
+
+-- Welcome notif
+sendNotification("Welcome!", "Welcome " .. player.Name .. " — Karker Hub v3.2 loaded.", 4)
+
+-- END
