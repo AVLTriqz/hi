@@ -1,6 +1,6 @@
 -- Karker Hub Mobile — FINAL EDITION (One LocalScript)
--- Put in StarterPlayerScripts or StarterGui (LocalScript)
--- All features included. Mobile-friendly entire-hub dragging.
+-- Place in StarterPlayerScripts or StarterGui (LocalScript)
+-- All features included. Whole-hub mobile drag fixed.
 
 -- Services
 local Players = game:GetService("Players")
@@ -13,7 +13,7 @@ local TeleportService = game:GetService("TeleportService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Config
+-- CONFIG
 local CONF = {
     accent = Color3.fromRGB(255, 80, 60),
     bg = Color3.fromRGB(6,6,8),
@@ -21,7 +21,6 @@ local CONF = {
     auraRadius = 14,
     rainbowSpeed = 1.2,
     fireAuraDuration = 15,
-    -- Roblox sound IDs
     sounds = {
         click = "rbxassetid://2101148",
         hover = "rbxassetid://146069018",
@@ -33,21 +32,21 @@ local CONF = {
     }
 }
 
--- Local state
+-- STATE
 local STATE = {
     destroyed = false,
-    parts = {},              -- created world parts
+    parts = {},                -- world parts we create
     gui = nil,
     notifGui = nil,
     notifHolder = nil,
-    playerHighlights = {},   -- player -> highlight
-    itemHighlights = {},     -- item -> highlight
-    float = { enabled=false, att=nil, vf=nil, strength = CONF.floatStrength },
-    special = { active=false, auraPart=nil, scanner=nil, radius = CONF.auraRadius },
+    playerHighlights = {},     -- map player -> highlight
+    itemHighlights = {},       -- map instance -> highlight
+    float = {enabled=false, att=nil, vf=nil, strength = CONF.floatStrength},
+    special = {active=false, auraPart=nil, scanner=nil, radius = CONF.auraRadius},
     conns = {}
 }
 
--- Utilities
+-- UTILITIES
 local function safeChar() return player.Character or player.CharacterAdded:Wait() end
 
 local function playSound(id, parent, vol, loop)
@@ -72,7 +71,7 @@ end
 local function newUICorner(parent, r) local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r or 10); c.Parent = parent; return c end
 local function newStroke(parent, col, thick) local s = Instance.new("UIStroke", parent); s.Color = col or Color3.fromRGB(30,30,30); s.Thickness = thick or 1; return s end
 
--- Custom Notifications (bottom-left)
+-- NOTIFICATIONS (custom, bottom-left)
 local function createNotifSystem()
     local g = Instance.new("ScreenGui", playerGui)
     g.Name = "KH_Notifs"
@@ -94,42 +93,42 @@ end
 
 STATE.notifGui, STATE.notifHolder = createNotifSystem()
 
-local function notify(title, text, duration)
+local function notify(title, text, dur)
     if STATE.destroyed then return end
-    duration = duration or 3
-    local f = Instance.new("Frame", STATE.notifHolder)
-    f.Size = UDim2.new(1,0,0,0)
-    f.BackgroundColor3 = Color3.fromRGB(12,12,14)
-    newUICorner(f, 10)
-    newStroke(f, CONF.accent, 1)
+    dur = dur or 3
+    local frame = Instance.new("Frame", STATE.notifHolder)
+    frame.Size = UDim2.new(1,0,0,0)
+    frame.BackgroundColor3 = Color3.fromRGB(12,12,14)
+    newUICorner(frame, 10)
+    newStroke(frame, CONF.accent, 1)
 
-    local icon = Instance.new("TextLabel", f)
+    local icon = Instance.new("TextLabel", frame)
     icon.Size = UDim2.new(0,40,0,40); icon.Position = UDim2.new(0,8,0,8)
     icon.BackgroundTransparency = 1; icon.Font = Enum.Font.Cartoon; icon.TextSize = 20; icon.Text = "🔔"; icon.TextColor3 = CONF.accent
 
-    local tLabel = Instance.new("TextLabel", f)
-    tLabel.Size = UDim2.new(1, -56, 0, 20); tLabel.Position = UDim2.new(0,56,0,6)
-    tLabel.BackgroundTransparency = 1; tLabel.Font = Enum.Font.Cartoon; tLabel.TextSize = 14; tLabel.TextColor3 = CONF.accent
-    tLabel.Text = title
+    local titleLbl = Instance.new("TextLabel", frame)
+    titleLbl.Size = UDim2.new(1, -56, 0, 20); titleLbl.Position = UDim2.new(0,56,0,6)
+    titleLbl.BackgroundTransparency = 1; titleLbl.Font = Enum.Font.Cartoon; titleLbl.TextSize = 14; titleLbl.TextColor3 = CONF.accent
+    titleLbl.Text = title
 
-    local mLabel = Instance.new("TextLabel", f)
-    mLabel.Size = UDim2.new(1, -56, 0, 44); mLabel.Position = UDim2.new(0,56,0,26)
-    mLabel.BackgroundTransparency = 1; mLabel.Font = Enum.Font.Cartoon; mLabel.TextSize = 13; mLabel.TextColor3 = Color3.fromRGB(220,220,220)
-    mLabel.TextWrapped = true; mLabel.TextXAlignment = Enum.TextXAlignment.Left
-    mLabel.Text = text
+    local msg = Instance.new("TextLabel", frame)
+    msg.Size = UDim2.new(1, -56, 0, 44); msg.Position = UDim2.new(0,56,0,26)
+    msg.BackgroundTransparency = 1; msg.Font = Enum.Font.Cartoon; msg.TextSize = 13; msg.TextColor3 = Color3.fromRGB(220,220,220)
+    msg.TextWrapped = true; msg.TextXAlignment = Enum.TextXAlignment.Left
+    msg.Text = text
 
-    playSound(CONF.sounds.notif, f, 1, false)
-    tween(f, 0.26, {Size = UDim2.new(1,0,0,92)})
-    task.delay(duration, function()
-        if f and f.Parent then
-            tween(f, 0.18, {Size = UDim2.new(1,0,0,0)})
+    playSound(CONF.sounds.notif, frame, 1, false)
+    tween(frame, 0.26, {Size = UDim2.new(1,0,0,92)})
+    task.delay(dur, function()
+        if frame and frame.Parent then
+            tween(frame, 0.18, {Size = UDim2.new(1,0,0,0)})
             task.wait(0.22)
-            if f and f.Parent then f:Destroy() end
+            if frame and frame.Parent then frame:Destroy() end
         end
     end)
 end
 
--- Loading screen (full cover)
+-- LOADING SCREEN (full cover)
 local function spawnLoading(onFinish)
     local gui = Instance.new("ScreenGui", playerGui)
     gui.Name = "KH_Loading"
@@ -159,9 +158,7 @@ local function spawnLoading(onFinish)
     local barFill = Instance.new("Frame", barBg)
     barFill.Size = UDim2.new(0,0,1,0); barFill.BackgroundColor3 = CONF.accent; newUICorner(barFill, 8)
 
-    -- snow frames
-    local snowFolder = Instance.new("Folder", bg)
-    snowFolder.Name = "Snow"
+    local snowFolder = Instance.new("Folder", bg); snowFolder.Name = "Snow"
     task.spawn(function()
         while bg.Parent do
             local s = Instance.new("Frame", snowFolder)
@@ -186,15 +183,15 @@ local function spawnLoading(onFinish)
     playSound(CONF.sounds.vine, bg, 0.85, false)
 
     -- typewriter
-    spawn(function()
+    task.spawn(function()
         for i = 1, #msg do
             center.Text = msg:sub(1, i)
             task.wait(0.03)
         end
     end)
 
-    -- progress animation
-    spawn(function()
+    -- progress
+    task.spawn(function()
         local prog = 0
         local steps = {0.12,0.28,0.48,0.72,0.9,1}
         for _, s in ipairs(steps) do
@@ -216,7 +213,7 @@ local function spawnLoading(onFinish)
     end)
 end
 
--- world ring factory
+-- WORLD RING (aura)
 local function createRing(radius, color)
     local p = Instance.new("Part", workspace)
     p.Anchored = true; p.CanCollide = false
@@ -228,7 +225,7 @@ local function createRing(radius, color)
     return p
 end
 
--- Brainrot name match helpers
+-- Brainrot name list and helper
 local brainrotNames = {"Brainrot","Tralelero","Saturnita","Balerina Capucina","Coco Fanto Ele Fanto","orcalero Orcala","odin din dun","Dragons"}
 local function isBrainrotName(name)
     if not name then return false end
@@ -239,7 +236,7 @@ local function isBrainrotName(name)
     return false
 end
 
--- Build hub (UI + features)
+-- BUILD HUB (UI + features)
 local function buildHub()
     if STATE.destroyed then return end
 
@@ -248,16 +245,17 @@ local function buildHub()
     gui.ResetOnSpawn = false
     STATE.gui = gui
 
+    -- main window
     local window = Instance.new("Frame", gui)
     window.Name = "Window"
     window.Size = UDim2.new(0, 320, 0, 240)
     window.Position = UDim2.new(0.5, -160, 0.5, -120)
-    window.AnchorPoint = Vector2.new(0.5, 0.5)
+    window.AnchorPoint = Vector2.new(0.5,0.5)
     window.BackgroundColor3 = Color3.fromRGB(4,4,6)
     window.BorderSizePixel = 0
     newUICorner(window, 14); newStroke(window, Color3.fromRGB(18,18,20), 1)
 
-    -- rainbow stroke
+    -- rainbow stroke animation
     local stroke = Instance.new("UIStroke", window)
     stroke.Thickness = 3; stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     local hue = 0
@@ -266,7 +264,7 @@ local function buildHub()
         stroke.Color = Color3.fromHSV(hue, 0.95, 1)
     end)
 
-    -- little fire particle under hub
+    -- small fire emitter under hub
     local auraHolder = Instance.new("Frame", window)
     auraHolder.Size = UDim2.new(1,0,0,6); auraHolder.Position = UDim2.new(0,0,1,-6); auraHolder.BackgroundTransparency = 1
     local auraEmitter = Instance.new("ParticleEmitter", auraHolder)
@@ -274,7 +272,7 @@ local function buildHub()
     auraEmitter.Rate = 18; auraEmitter.Lifetime = NumberRange.new(0.6,1.0); auraEmitter.Speed = NumberRange.new(0.1,0.3)
     auraEmitter.Enabled = true
 
-    -- background snow frames (UI)
+    -- subtle snow UI
     local bgSnow = Instance.new("Folder", window); bgSnow.Name = "BG_Snow"
     task.spawn(function()
         while window and window.Parent do
@@ -289,7 +287,7 @@ local function buildHub()
         end
     end)
 
-    -- header (we will make entire window draggable so clicks anywhere start drag)
+    -- header & title
     local header = Instance.new("Frame", window)
     header.Size = UDim2.new(1,0,0,56); header.Position = UDim2.new(0,0,0,0)
     header.BackgroundColor3 = Color3.fromRGB(10,10,12); newUICorner(header, 12)
@@ -316,7 +314,7 @@ local function buildHub()
     local btnToggle = mkBtn(header, "⟳", -104)
     local btnDestroy = mkBtn(header, "X", -58, Color3.fromRGB(140,36,36))
 
-    -- Entire-window mobile+pc drag (robust)
+    -- ENTIRE WINDOW DRAG (mobile+pc robust) - FIXED
     do
         local dragging = false
         local dragInput = nil
@@ -324,7 +322,7 @@ local function buildHub()
         local startPos = nil
 
         local function beginDrag(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
                 dragging = true
                 dragInput = input
                 dragStart = input.Position
@@ -354,44 +352,35 @@ local function buildHub()
         UserInputService.InputChanged:Connect(updateDrag)
     end
 
-    -- content area
+    -- content + scroll
     local content = Instance.new("Frame", window)
     content.Size = UDim2.new(1, -28, 1, -86); content.Position = UDim2.new(0, 14, 0, 66); content.BackgroundTransparency = 1
 
     local leftScroll = Instance.new("ScrollingFrame", content)
-    leftScroll.Size = UDim2.new(1, 0, 1, 0)
-    leftScroll.CanvasSize = UDim2.new(0, 0, 0, 1400)
-    leftScroll.ScrollBarThickness = 8
-    leftScroll.BackgroundTransparency = 1
-    local leftLayout = Instance.new("UIListLayout", leftScroll)
-    leftLayout.Padding = UDim.new(0, 10)
-    leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    leftScroll.Size = UDim2.new(1, 0, 1, 0); leftScroll.CanvasSize = UDim2.new(0, 0, 0, 1400)
+    leftScroll.ScrollBarThickness = 8; leftScroll.BackgroundTransparency = 1
+    local leftLayout = Instance.new("UIListLayout", leftScroll); leftLayout.Padding = UDim.new(0,10); leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
     local infoBox = Instance.new("TextLabel", window)
-    infoBox.Size = UDim2.new(0.5, -8, 0, 28)
-    infoBox.Position = UDim2.new(0.5, -8, 1, -38)
+    infoBox.Size = UDim2.new(0.5, -8, 0, 28); infoBox.Position = UDim2.new(0.5, -8, 1, -38)
     infoBox.BackgroundTransparency = 1; infoBox.Font = Enum.Font.Cartoon; infoBox.TextSize = 12; infoBox.TextColor3 = Color3.fromRGB(200,200,200)
     infoBox.Text = ("Welcome %s — YOUNG"):format(player.Name)
 
     -- Button factory
-    local function makeButton(label, emoji)
+    local function makeButton(text, emoji)
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(1, -16, 0, 52)
         b.BackgroundColor3 = Color3.fromRGB(12,12,14)
-        newUICorner(b, 10)
-        newStroke(b, Color3.fromRGB(24,24,26), 1)
-        b.Font = Enum.Font.Cartoon
-        b.TextSize = 15
-        b.TextColor3 = Color3.fromRGB(230,230,230)
-        b.AutoButtonColor = false
-        b.Text = ((emoji and (emoji .. "  ") or "") .. label)
+        newUICorner(b, 10); newStroke(b, Color3.fromRGB(24,24,26), 1)
+        b.Font = Enum.Font.Cartoon; b.TextSize = 15; b.TextColor3 = Color3.fromRGB(230,230,230); b.AutoButtonColor = false
+        b.Text = ((emoji and (emoji.."  ") or "") .. text)
         b.MouseEnter:Connect(function() playSound(CONF.sounds.hover, b, 0.5, false); tween(b, 0.12, {BackgroundColor3 = Color3.fromRGB(28,6,6)}); tween(b, 0.12, {Size = UDim2.new(1, -12, 0, 56)}) end)
         b.MouseLeave:Connect(function() tween(b, 0.12, {BackgroundColor3 = Color3.fromRGB(12,12,14)}); tween(b, 0.12, {Size = UDim2.new(1, -16, 0, 52)}) end)
         b.Parent = leftScroll
         return b
     end
 
-    -- Feature implementations
+    -- FEATURE IMPLEMENTATIONS ------------------------------------------------
 
     -- PLAYER ESP
     local function togglePlayerESP()
@@ -424,7 +413,7 @@ local function buildHub()
                 end
             end)
         end
-        notify("ESP", "Player ESP enabled (local)", 2)
+        notify("ESP", "Player ESP enabled (local) 👀", 2)
     end
 
     -- BRAINROT ESP
@@ -438,15 +427,13 @@ local function buildHub()
         end
         STATE.brESP = true
         for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") or obj:IsA("Model") then
-                if isBrainrotName(obj.Name) then
-                    local h = Instance.new("Highlight")
-                    h.Name = "KH_ItemHighlight"
-                    h.FillColor = Color3.fromRGB(0,125,255)
-                    h.OutlineColor = Color3.fromRGB(255,30,30)
-                    h.Parent = obj
-                    STATE.itemHighlights[obj] = h
-                end
+            if (obj:IsA("BasePart") or obj:IsA("Model")) and isBrainrotName(obj.Name) then
+                local h = Instance.new("Highlight")
+                h.Name = "KH_ItemHighlight"
+                h.FillColor = Color3.fromRGB(0,125,255)
+                h.OutlineColor = Color3.fromRGB(255,30,30)
+                h.Parent = obj
+                STATE.itemHighlights[obj] = h
             end
         end
         notify("Brainrot ESP", "Enabled (local)", 2)
@@ -496,19 +483,16 @@ local function buildHub()
         end)
     end
 
-    -- FIRE AURA (15s)
+    -- FIRE AURA (local) 15 sec
     local function spawnFireAuraOnPlayer()
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then notify("Fire", "Character not ready", 2); return end
         local hrp = char.HumanoidRootPart
-        local p = Instance.new("Part", workspace)
-        p.Transparency = 1; p.Anchored = true; p.CanCollide = false
+        local p = Instance.new("Part", workspace); p.Transparency = 1; p.Anchored = true; p.CanCollide = false
         p.Position = hrp.Position
         local emitter = Instance.new("ParticleEmitter", p)
         emitter.Texture = "rbxassetid://241594408"
-        emitter.Rate = 140
-        emitter.Lifetime = NumberRange.new(0.8, 1.6)
-        emitter.Speed = NumberRange.new(0.2, 0.6)
+        emitter.Rate = 140; emitter.Lifetime = NumberRange.new(0.8, 1.6); emitter.Speed = NumberRange.new(0.2, 0.6)
         Debris:AddItem(p, CONF.fireAuraDuration + 1)
         local conn
         conn = RunService.Heartbeat:Connect(function()
@@ -588,15 +572,15 @@ local function buildHub()
         end)
     end
 
-    -- FINAL BOSS MODE (overlay + camera shake + fire rain + boss music)
+    -- FINAL BOSS MODE (overlay, camera shake, fire rain, sound)
     local function doFinalBoss()
         notify("FINAL BOSS", "Final Boss Mode activated — chaos incoming 💀", 4)
         playSound(CONF.sounds.boss, playerGui, 1.2, false)
 
         local overlayGui = Instance.new("ScreenGui", playerGui); overlayGui.Name = "KH_BossOverlay"
-        local f = Instance.new("Frame", overlayGui)
-        f.Size = UDim2.new(1,0,1,0); f.BackgroundColor3 = Color3.fromRGB(255, 20, 20); f.BackgroundTransparency = 1; f.ZIndex = 9999
-        tween(f, 0.35, {BackgroundTransparency = 0.45}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local overlay = Instance.new("Frame", overlayGui)
+        overlay.Size = UDim2.new(1,0,1,0); overlay.BackgroundColor3 = Color3.fromRGB(255, 20, 20); overlay.BackgroundTransparency = 1; overlay.ZIndex = 9999
+        tween(overlay, 0.35, {BackgroundTransparency = 0.45}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
         local cam = workspace.CurrentCamera
         spawn(function()
@@ -623,13 +607,13 @@ local function buildHub()
         end)
     end
 
-    -- Server hop
+    -- SERVER HOP
     local function doServerHop()
         notify("Server Hop", "Attempting server hop...", 3)
         pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
     end
 
-    -- Teleport to place/instance
+    -- Teleport to place / instance
     local function tpToPlace(pid)
         local id = tonumber(pid)
         if not id then notify("Teleport", "Invalid place id", 3); return end
@@ -641,7 +625,7 @@ local function buildHub()
         pcall(function() TeleportService:TeleportToPlaceInstance(id, tostring(jobId), player) end)
     end
 
-    -- Brainrot actions
+    -- BRAINROT ACTIONS
     local function playMostValuableBrainrot()
         local best = nil; local bestVal = -math.huge
         for _, obj in ipairs(workspace:GetDescendants()) do
@@ -689,7 +673,7 @@ local function buildHub()
         end
     end
 
-    -- UI helper to add button
+    -- UI helper for adding a button and binding
     local function addButton(label, emoji, callback)
         local b = makeButton(label, emoji)
         b.MouseButton1Click:Connect(function()
@@ -699,7 +683,22 @@ local function buildHub()
         return b
     end
 
-    -- Create buttons
+    -- we used makeButton earlier; if not defined here, define quickly:
+    local function makeButton(text, emoji)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(1, -16, 0, 52)
+        b.BackgroundColor3 = Color3.fromRGB(12,12,14)
+        newUICorner(b, 10); newStroke(b, Color3.fromRGB(24,24,26), 1)
+        b.Font = Enum.Font.Cartoon; b.TextSize = 15; b.TextColor3 = Color3.fromRGB(230,230,230)
+        b.AutoButtonColor = false
+        b.Text = ((emoji and (emoji.."  ") or "") .. text)
+        b.MouseEnter:Connect(function() playSound(CONF.sounds.hover, b, 0.5, false); tween(b, 0.12, {BackgroundColor3 = Color3.fromRGB(28,6,6)}); tween(b, 0.12, {Size = UDim2.new(1, -12, 0, 56)}) end)
+        b.MouseLeave:Connect(function() tween(b, 0.12, {BackgroundColor3 = Color3.fromRGB(12,12,14)}); tween(b, 0.12, {Size = UDim2.new(1, -16, 0, 52)}) end)
+        b.Parent = leftScroll
+        return b
+    end
+
+    -- Add all buttons
     addButton("Player ESP Toggle", "📡", togglePlayerESP)
     addButton("Brainrots ESP Toggle", "🧠", toggleBrainrotESP)
     addButton("Float Toggle", "🕊️", toggleFloat)
@@ -709,7 +708,7 @@ local function buildHub()
     addButton("Final Boss Mode", "⚔️", doFinalBoss)
     addButton("Server Hop", "🔀", doServerHop)
 
-    -- Teleport boxes
+    -- Teleport boxes (simple)
     local pidBox = Instance.new("TextBox", leftScroll)
     pidBox.Size = UDim2.new(1, -16, 0, 28); pidBox.PlaceholderText = "Place ID (number)"; pidBox.BackgroundColor3 = Color3.fromRGB(8,8,10); newUICorner(pidBox, 8)
     local jobBox = Instance.new("TextBox", leftScroll)
@@ -722,7 +721,7 @@ local function buildHub()
     addButton("Steal Brainrots", "🤝", stealBrainrots)
     addButton("Go Base", "📦", goBase)
 
-    -- header controls behavior
+    -- header controls wiring
     btnMin.MouseButton1Click:Connect(function()
         if window.Size.Y.Offset > 48 then
             tween(window, 0.22, {Size = UDim2.new(window.Size.X.Scale, window.Size.X.Offset, 0, 48)})
@@ -748,7 +747,7 @@ local function buildHub()
         if STATE.notifGui and STATE.notifGui.Parent then STATE.notifGui:Destroy() end
     end)
 
-    -- respawn handling for float
+    -- respawn handling for float (reapply)
     Players.LocalPlayer.CharacterAdded:Connect(function(char)
         task.delay(0.5, function()
             if STATE.float.enabled then
@@ -764,12 +763,12 @@ local function buildHub()
         end)
     end)
 
-    -- final housekeeping
+    -- housekeeping
     table.insert(STATE.parts, gui)
     notify("Karker Hub", ("Loaded — Mobile Final Edition (YOUNG) — %s"):format(player.Name), 4)
 end
 
--- Start: spawn loading then build hub
+-- START: loading then hub
 spawnLoading(function()
     if STATE.destroyed then return end
     buildHub()
