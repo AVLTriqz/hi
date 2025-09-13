@@ -1,259 +1,786 @@
--- // Karker Hub Mobile Edition vFinal
--- // Compact, Draggable, Red/Black Neon, Funny Loading, Goofy Sounds
--- // Features: ESP, Float, Teleport, Special Sauce, Fire Aura, Final Boss Mode, Brainrots Tab
--- // Credits: YOUNG + ChatGPT
+-- Karker Hub Mobile Final — Single LocalScript
+-- Paste into StarterPlayerScripts
+-- Features: Loading (full screen), draggable mobile hub, rainbow border, sounds, ESP (players & items),
+-- Float (VectorForce), Teleport by tap, Special Sauce (aura + taser visuals), Fire aura, Final Boss Mode,
+-- Brainrots: Play Most Valuable, Brainrots ESP, Steal Brainrots, Go Base, cleanup & respawn handling.
+-- Credits: YOUNG
 
--- // Services
+-- SERVICES
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local Debris = game:GetService("Debris")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
 
 local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- // Sounds (Goofy placeholders)
-local function playSound(id)
-    local s = Instance.new("Sound")
-    s.SoundId = "rbxassetid://" .. id
-    s.Volume = 2
-    s.Parent = workspace
-    s:Play()
-    Debris:AddItem(s, 5)
-end
-
-local funnySounds = {
-    vine = "4590662766",   -- Vine boom
-    bruh = "4275849483",   -- Bruh
-    oof = "131072121",     -- Roblox OOF
+-- CONFIG (swap sound IDs if you want)
+local CONF = {
+    accent = Color3.fromRGB(255, 80, 60),
+    bg = Color3.fromRGB(10, 10, 12),
+    floatStrength = 0.55,
+    auraRadius = 14,
+    rainbowSpeed = 1.2,
+    sounds = {
+        click = "rbxassetid://2101148",    -- click
+        hover = "rbxassetid://146069018",  -- hover
+        notif = "rbxassetid://138186576",  -- notification
+        vine = "rbxassetid://4590662766",  -- vine boom
+        bruh = "rbxassetid://4275849483",  -- bruh
+        oof = "rbxassetid://131072121",    -- oof
+        bossMusic = "rbxassetid://184614231" -- placeholder
+    }
 }
 
--- // Notification wrapper (bottom left)
+-- STATE
+local STATE = {
+    destroyed = false,
+    parts = {},
+    itemHighlights = {},
+    playerHighlights = {},
+    espBoxes = {},
+    float = {enabled=false, att=nil, vf=nil, strength=CONF.floatStrength},
+    special = {active=false, aura=nil, scanner=nil, radius=CONF.auraRadius},
+    conns = {}
+}
+
+-- UTIL
+local function safeChar() return player.Character or player.CharacterAdded:Wait() end
+
+local function playLocalSound(soundId, parent, volume, loop)
+    if not soundId or soundId == "" then return end
+    local s = Instance.new("Sound")
+    s.SoundId = soundId
+    s.Volume = volume or 1
+    s.Looped = loop == true
+    s.Parent = parent or playerGui
+    pcall(function() s:Play() end)
+    if not s.Looped then Debris:AddItem(s, 6) end
+    return s
+end
+
+local function tween(obj, t, props, style, dir)
+    local info = TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
+    local tk = TweenService:Create(obj, info, props)
+    tk:Play()
+    return tk
+end
+
+local function newUICorner(parent, rad)
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, rad or 10); c.Parent = parent; return c
+end
+local function newStroke(parent, col, thick)
+    local s = Instance.new("UIStroke", parent); s.Color = col or Color3.fromRGB(30,30,30); s.Thickness = thick or 1; return s
+end
+
 local function notify(title, text, dur)
-    StarterGui:SetCore("SendNotification", {
-        Title = "🔥 Karker Hub",
-        Text = "😎 " .. text,
-        Duration = dur or 4
-    })
-end
-
--- // Loading Screen
-local loadingGui = Instance.new("ScreenGui", player.PlayerGui)
-loadingGui.ResetOnSpawn = false
-
-local bg = Instance.new("Frame", loadingGui)
-bg.Size = UDim2.new(1, 0, 1, 0)
-bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-
-local loadingText = Instance.new("TextLabel", bg)
-loadingText.Size = UDim2.new(1, 0, 0, 60)
-loadingText.Position = UDim2.new(0, 0, 0.4, 0)
-loadingText.BackgroundTransparency = 1
-loadingText.TextColor3 = Color3.fromRGB(255, 0, 0)
-loadingText.Font = Enum.Font.GothamBold
-loadingText.TextSize = 28
-loadingText.Text = ""
-
--- Snowfall effect
-local snowFolder = Instance.new("Folder", bg)
-task.spawn(function()
-    while bg.Parent do
-        local snow = Instance.new("Frame", snowFolder)
-        snow.Size = UDim2.new(0, math.random(3, 6), 0, math.random(3, 6))
-        snow.Position = UDim2.new(math.random(), 0, -0.1, 0)
-        snow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        snow.BackgroundTransparency = 0.2
-        snow.BorderSizePixel = 0
-        local fallTween = TweenService:Create(snow, TweenInfo.new(math.random(3, 6)), {
-            Position = UDim2.new(snow.Position.X.Scale, math.random(-50, 50), 1.1, 0),
-            BackgroundTransparency = 1
+    dur = dur or 3
+    -- use StarterGui core notification for mobile compatibility + play sfx
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "🔥 "..tostring(title),
+            Text = tostring(text),
+            Duration = dur
         })
-        fallTween:Play()
-        Debris:AddItem(snow, 6)
-        task.wait(0.1)
-    end
-end)
+    end)
+    playLocalSound(CONF.sounds.notif, playerGui, 1, false)
+end
 
--- Funny roast loading message
-local funnyMessage = "😂 Loading... bro why u even stealing pets rn..."
-task.spawn(function()
-    for i = 1, #funnyMessage do
-        loadingText.Text = funnyMessage:sub(1, i)
-        task.wait(0.05)
-    end
-    playSound(funnySounds.bruh)
-    task.wait(2)
-    TweenService:Create(bg, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(loadingText, TweenInfo.new(1), {TextTransparency = 1}):Play()
-    for _, snow in ipairs(snowFolder:GetChildren()) do
-        TweenService:Create(snow, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-    end
-    task.wait(1.2)
-    loadingGui:Destroy()
-end)
+-- LOADING SCREEN (full cover)
+local function spawnLoading(onDone)
+    local gui = Instance.new("ScreenGui", playerGui)
+    gui.Name = "KH_Loading"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
 
--- // Hub GUI
-local hub = Instance.new("ScreenGui", player.PlayerGui)
-hub.ResetOnSpawn = false
+    local bg = Instance.new("Frame", gui)
+    bg.Size = UDim2.new(1,0,1,0)
+    bg.Position = UDim2.new(0,0,0,0)
+    bg.BackgroundColor3 = CONF.bg
+    bg.BorderSizePixel = 0
 
-local frame = Instance.new("Frame", hub)
-frame.Size = UDim2.new(0, 300, 0, 200)
-frame.Position = UDim2.new(0.5, -150, 0.5, -100)
-frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-frame.BorderSizePixel = 0
-frame.Active = true
-frame.Draggable = true
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+    -- vign
+    local vign = Instance.new("ImageLabel", bg)
+    vign.Size = UDim2.new(1.6,0,1.6,0); vign.Position = UDim2.new(-0.3,0,-0.3,0)
+    vign.Image = "rbxassetid://5058094581"; vign.BackgroundTransparency = 1; vign.ImageTransparency = 0.6
 
--- Neon rainbow border
-local uiStroke = Instance.new("UIStroke", frame)
-uiStroke.Thickness = 3
-uiStroke.Color = Color3.fromRGB(255, 0, 0)
-task.spawn(function()
-    while true do
-        for h = 0, 255, 5 do
-            uiStroke.Color = Color3.fromHSV(h/255,1,1)
-            task.wait(0.05)
+    local title = Instance.new("TextLabel", bg)
+    title.Size = UDim2.new(0.9,0,0,88); title.Position = UDim2.new(0.05,0,0.12,0)
+    title.BackgroundTransparency = 1; title.Font = Enum.Font.GothamBlack; title.TextSize = 28; title.Text = "Karker Hub (Mobile)"
+
+    local center = Instance.new("TextLabel", bg)
+    center.Size = UDim2.new(0.86,0,0,120); center.Position = UDim2.new(0.07,0,0.42,0)
+    center.BackgroundTransparency = 1; center.Font = Enum.Font.Gotham; center.TextSize = 16; center.TextWrapped = true
+
+    local barBg = Instance.new("Frame", bg)
+    barBg.Size = UDim2.new(0.56,0,0,14); barBg.Position = UDim2.new(0.22,0,0.72,0)
+    barBg.BackgroundColor3 = Color3.fromRGB(18,18,20); newUICorner(barBg, 8); newStroke(barBg, Color3.fromRGB(40,40,44), 1)
+
+    local barFill = Instance.new("Frame", barBg)
+    barFill.Size = UDim2.new(0,0,1,0); barFill.BackgroundColor3 = CONF.accent; newUICorner(barFill, 8)
+
+    -- snow
+    local snowFolder = Instance.new("Folder", bg)
+    snowFolder.Name = "Snow"
+    task.spawn(function()
+        while bg.Parent do
+            local s = Instance.new("Frame", snowFolder)
+            s.Size = UDim2.new(0, math.random(3,7), 0, math.random(3,7))
+            s.Position = UDim2.new(math.random(), 0, -0.1, 0)
+            s.BackgroundColor3 = Color3.fromRGB(255,255,255); s.BackgroundTransparency = 0.22; s.BorderSizePixel = 0
+            local x = math.random(-160,160)
+            tween(s, math.random(4,8), {Position = UDim2.new(s.Position.X.Scale, x, 1.12, 0), BackgroundTransparency = 1})
+            Debris:AddItem(s, 6)
+            task.wait(0.07)
         end
+    end)
+
+    local jokes = {
+        "✨ installing drip modules...",
+        "🍕 bribing devs with pizza... almost done",
+        "🤖 patching 'stealthy swagger' (pls don't report)",
+        "💀 searching for lost Brainrots... beep boop",
+        "🎉 applying snow, chaos and silly sounds"
+    }
+    local msg = jokes[math.random(1,#jokes)]
+    playLocalSound(CONF.sounds.vine, playerGui, 0.8, false)
+
+    -- typewriter center
+    spawn(function()
+        for i = 1, #msg do
+            center.Text = msg:sub(1, i)
+            task.wait(0.03)
+        end
+    end)
+
+    -- progress steps
+    spawn(function()
+        local prog = 0
+        local steps = {0.12,0.28,0.48,0.72,0.9,1}
+        for _, s in ipairs(steps) do
+            while prog < s do
+                prog = math.min(s, prog + (0.01 + math.random()*0.03))
+                tween(barFill, 0.12, {Size = UDim2.new(prog,0,1,0)})
+                task.wait(0.06)
+            end
+            task.wait(0.16 + math.random()*0.5)
+        end
+        task.wait(0.6)
+        tween(bg, 0.9, {BackgroundTransparency = 1})
+        tween(center, 0.9, {TextTransparency = 1})
+        tween(barBg, 0.6, {BackgroundTransparency = 1})
+        task.wait(0.85)
+        if snowFolder and snowFolder.Parent then snowFolder:Destroy() end
+        gui:Destroy()
+        if type(onDone) == "function" then pcall(onDone) end
+    end)
+end
+
+-- helper world ring
+local function createRing(radius, color)
+    local p = Instance.new("Part", workspace)
+    p.Anchored = true; p.CanCollide = false
+    p.Size = Vector3.new(radius*2, 0.25, radius*2)
+    p.Material = Enum.Material.Neon; p.Color = color or CONF.accent
+    p.Transparency = 0.32; p.Shape = Enum.PartType.Cylinder; p.Orientation = Vector3.new(90,0,0)
+    p.Name = "KH_AuraRing"
+    table.insert(STATE.parts, p)
+    return p
+end
+
+-- CREATE HUB (all features)
+local function buildHub()
+    if STATE.destroyed then return end
+
+    local gui = Instance.new("ScreenGui", playerGui)
+    gui.Name = "KarkerHubMobile"
+    gui.ResetOnSpawn = false
+
+    local window = Instance.new("Frame", gui)
+    window.Name = "Window"
+    window.Size = UDim2.new(0, 320, 0, 240)
+    window.Position = UDim2.new(0.5, -160, 0.5, -120)
+    window.BackgroundColor3 = CONF.bg
+    window.BorderSizePixel = 0
+    newUICorner(window, 14)
+    newStroke(window, Color3.fromRGB(28,28,30), 1)
+
+    -- rainbow stroke
+    local stroke = Instance.new("UIStroke", window)
+    stroke.Thickness = 3; stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    local hue = 0
+    STATE.conns.rainbow = RunService.RenderStepped:Connect(function(dt)
+        hue = (hue + dt * (1/CONF.rainbowSpeed)) % 1
+        stroke.Color = Color3.fromHSV(hue, 0.95, 1)
+    end)
+
+    -- subtle snow frames in background
+    local bgSnow = Instance.new("Folder", window)
+    bgSnow.Name = "BG_Snow"
+    task.spawn(function()
+        while window and window.Parent do
+            local s = Instance.new("Frame", bgSnow)
+            s.Size = UDim2.new(0, math.random(2,6), 0, math.random(2,6))
+            s.Position = UDim2.new(math.random(),0,-0.12,0)
+            s.BackgroundColor3 = Color3.fromRGB(255,255,255); s.BackgroundTransparency = 0.85; s.BorderSizePixel = 0
+            local x = math.random(-120,120)
+            tween(s, math.random(6,10), {Position = UDim2.new(s.Position.X.Scale, x, 1.12, 0)})
+            Debris:AddItem(s, 10)
+            task.wait(0.14)
+        end
+    end)
+
+    -- header & drag
+    local header = Instance.new("Frame", window)
+    header.Size = UDim2.new(1,0,0,56)
+    header.Position = UDim2.new(0,0,0,0)
+    header.BackgroundColor3 = Color3.fromRGB(18,18,20)
+    newUICorner(header, 12)
+
+    local title = Instance.new("TextLabel", header)
+    title.Size = UDim2.new(0.7,0,1,0)
+    title.Position = UDim2.new(0.04,0,0,0)
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamBlack; title.TextSize = 18; title.TextColor3 = Color3.fromRGB(245,245,245)
+    title.Text = "Karker Hub 🔥"
+
+    local subtitle = Instance.new("TextLabel", header)
+    subtitle.Size = UDim2.new(0.66,0,0,14)
+    subtitle.Position = UDim2.new(0.04,0,1,-20)
+    subtitle.BackgroundTransparency = 1; subtitle.Font = Enum.Font.Gotham; subtitle.TextSize = 10
+    subtitle.TextColor3 = Color3.fromRGB(200,200,200); subtitle.Text = "Mobile — Created by YOUNG"
+
+    -- header buttons
+    local function mkBtn(parent, txt, xOff, bgc)
+        local b = Instance.new("TextButton", parent)
+        b.Size = UDim2.new(0, 34, 0, 28)
+        b.Position = UDim2.new(1, xOff, 0.12, 0)
+        b.Text = txt
+        b.Font = Enum.Font.GothamBold; b.TextSize = 16
+        b.BackgroundColor3 = bgc or Color3.fromRGB(28,28,30)
+        newUICorner(b, 8)
+        return b
     end
-end)
 
--- Title Bar
-local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, -90, 0, 30)
-title.Position = UDim2.new(0, 10, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = "🔥 Karker Hub"
-title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 20
-title.TextXAlignment = Enum.TextXAlignment.Left
+    local btnMin = mkBtn(header, "—", -150)
+    local btnToggle = mkBtn(header, "⟳", -110)
+    local btnDestroy = mkBtn(header, "X", -68, Color3.fromRGB(140,36,36))
 
--- Control buttons
-local function makeControlButton(txt, offset, callback)
-    local b = Instance.new("TextButton", frame)
-    b.Size = UDim2.new(0, 25, 0, 25)
-    b.Position = UDim2.new(1, offset, 0, 2)
-    b.Text = txt
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 18
-    b.TextColor3 = Color3.new(1,1,1)
-    b.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 5)
-    b.MouseButton1Click:Connect(function()
-        playSound(funnySounds.vine)
-        callback()
-    end)
-    return b
-end
+    -- drag handling for mobile & PC (header)
+    do
+        local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+        header.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = window.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        header.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                local newX = startPos.X.Offset + delta.X
+                local newY = startPos.Y.Offset + delta.Y
+                local view = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+                local wsize = window.AbsoluteSize
+                newX = math.clamp(newX, -wsize.X*0.8, view.X - 40)
+                newY = math.clamp(newY, -wsize.Y*0.8, view.Y - 40)
+                window.Position = UDim2.new(0, newX, 0, newY)
+            end
+        end)
+    end
 
-local minimized = false
-makeControlButton("-", -80, function()
-    minimized = not minimized
-    frame.Size = minimized and UDim2.new(0, 300, 0, 30) or UDim2.new(0, 300, 0, 200)
-end)
+    -- content area with scrolling buttons
+    local content = Instance.new("Frame", window)
+    content.Size = UDim2.new(1, -28, 1, -86)
+    content.Position = UDim2.new(0, 14, 0, 66)
+    content.BackgroundTransparency = 1
 
-makeControlButton("⭕", -50, function()
-    frame.Visible = not frame.Visible
-end)
+    local left = Instance.new("Frame", content)
+    left.Size = UDim2.new(1, 0, 1, 0)
+    left.Position = UDim2.new(0, 0, 0, 0)
+    left.BackgroundTransparency = 1
 
-makeControlButton("❌", -20, function()
-    hub:Destroy()
-end)
+    local leftScroll = Instance.new("ScrollingFrame", left)
+    leftScroll.Size = UDim2.new(1, 0, 1, 0)
+    leftScroll.CanvasSize = UDim2.new(0, 0, 0, 1400)
+    leftScroll.ScrollBarThickness = 8
+    leftScroll.BackgroundTransparency = 1
+    local leftLayout = Instance.new("UIListLayout", leftScroll)
+    leftLayout.Padding = UDim.new(0, 10)
+    leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Scrollable buttons container
-local scroll = Instance.new("ScrollingFrame", frame)
-scroll.Size = UDim2.new(1, -10, 1, -40)
-scroll.Position = UDim2.new(0, 5, 0, 35)
-scroll.BackgroundTransparency = 1
-scroll.ScrollBarThickness = 4
-local layout = Instance.new("UIListLayout", scroll)
-layout.Padding = UDim.new(0, 5)
+    -- small info label
+    local infoBox = Instance.new("TextLabel", window)
+    infoBox.Size = UDim2.new(0.5, -8, 0, 28)
+    infoBox.Position = UDim2.new(0.5, -8, 1, -38)
+    infoBox.BackgroundTransparency = 1
+    infoBox.Font = Enum.Font.Gotham
+    infoBox.TextSize = 12
+    infoBox.TextColor3 = Color3.fromRGB(200,200,200)
+    infoBox.Text = ("Welcome %s — YOUNG"):format(player.Name)
 
--- Function to make animated buttons
-local function makeButton(text, callback)
-    local btn = Instance.new("TextButton", scroll)
-    btn.Size = UDim2.new(1, -10, 0, 35)
-    btn.Text = text
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 16
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    btn.MouseButton1Click:Connect(function()
-        playSound(funnySounds.oof)
-        notify("Hub", text.." clicked!", 3)
-        callback()
-    end)
-    return btn
-end
+    -- Button factory
+    local function makeButton(label, emoji)
+        local b = Instance.new("TextButton", leftScroll)
+        b.Size = UDim2.new(1, -16, 0, 52)
+        b.Position = UDim2.new(0, 8, 0, 0)
+        b.BackgroundColor3 = Color3.fromRGB(10,10,12)
+        newUICorner(b, 10)
+        newStroke(b, Color3.fromRGB(24,24,26), 1)
+        b.Font = Enum.Font.GothamSemibold
+        b.Text = ((emoji and (emoji .. "  ") or "") .. label)
+        b.TextSize = 15
+        b.TextColor3 = Color3.fromRGB(230,230,230)
+        b.AutoButtonColor = false
 
--- Features
-makeButton("ESP Toggle", function() print("ESP Toggled") end)
-makeButton("Float Toggle", function() print("Float Toggled") end)
-makeButton("Teleport (Click Anywhere)", function() print("TP enabled") end)
-makeButton("Special Sauce Aura", function() print("Aura active") end)
-makeButton("Final Boss Mode", function() print("Boss Mode!") end)
-makeButton("🔥 Fire Aura", function() print("Fire Aura!") end)
+        b.MouseEnter:Connect(function()
+            playLocalSound(CONF.sounds.hover, playerGui, 0.6, false)
+            tween(b, 0.12, {BackgroundColor3 = Color3.fromRGB(28,6,6)})
+            tween(b, 0.12, {Size = UDim2.new(1, -12, 0, 56)})
+        end)
+        b.MouseLeave:Connect(function()
+            tween(b, 0.12, {BackgroundColor3 = Color3.fromRGB(10,10,12)})
+            tween(b, 0.12, {Size = UDim2.new(1, -16, 0, 52)})
+        end)
+        b.MouseButton1Click:Connect(function()
+            playLocalSound(CONF.sounds.click, playerGui, 0.8, false)
+            tween(b, 0.06, {Size = UDim2.new(1, -18, 0, 48)})
+            task.delay(0.12, function() if b and b.Parent then tween(b, 0.12, {Size = UDim2.new(1, -16, 0, 52)}) end end)
+        end)
+        return b
+    end
 
--- Brainrots Tab
-makeButton("Play Most Valuable Brainrot", function()
-    local mostValuable, highestValue = nil, 0
-    for _, item in pairs(workspace:GetDescendants()) do
-        if item.Name:match("Brainrot") and item:FindFirstChild("Value") then
-            local v = item.Value.Value
-            if v > highestValue then
-                highestValue, mostValuable = v, item
+    -- ===== Features Implementation =====
+
+    -- PLAYER ESP toggle (local highlights)
+    local function togglePlayerESP()
+        if STATE.playerESPEnabled then
+            -- disable
+            for _, h in pairs(STATE.playerHighlights) do pcall(function() h:Destroy() end) end
+            STATE.playerHighlights = {}
+            STATE.playerESPEnabled = false
+            notify("ESP", "Player ESP disabled", 2)
+            return
+        end
+        STATE.playerESPEnabled = true
+        for _, pl in ipairs(Players:GetPlayers()) do
+            if pl ~= player and pl.Character and pl.Character:FindFirstChild("Head") then
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "KH_PlayerHighlight"
+                highlight.FillColor = Color3.fromRGB(255,150,150)
+                highlight.OutlineColor = Color3.fromRGB(255,80,80)
+                highlight.Parent = pl.Character
+                STATE.playerHighlights[pl] = highlight
             end
         end
+        -- keep new players covered
+        if not STATE.conns.playerAddedConn then
+            STATE.conns.playerAddedConn = Players.PlayerAdded:Connect(function(pl)
+                if STATE.playerESPEnabled and pl ~= player then
+                    pl.CharacterAdded:Wait()
+                    if pl.Character and pl.Character:FindFirstChild("Head") then
+                        local highlight = Instance.new("Highlight", pl.Character)
+                        highlight.FillColor = Color3.fromRGB(255,150,150)
+                        highlight.OutlineColor = Color3.fromRGB(255,80,80)
+                        STATE.playerHighlights[pl] = highlight
+                    end
+                end
+            end)
+        end
+        notify("ESP", "Player ESP enabled (local)", 2)
     end
-    if mostValuable and player.Character then
-        mostValuable.Parent = player.Character
+
+    -- ITEM (Brainrots) ESP toggle
+    local brainrotListNames = {"Brainrot", "Tralelero", "Saturnita", "Balerina Capucina", "Coco Fanto Ele Fanto", "orcalero Orcala", "odin din dun", "Dragons"}
+    local function isBrainrotName(n)
+        if not n then return false end
+        for _, s in ipairs(brainrotListNames) do
+            if string.find(n:lower(), s:lower()) then return true end
+        end
+        return false
+    end
+
+    local function toggleBrainrotESP()
+        if STATE.brESP then
+            for item, highlight in pairs(STATE.itemHighlights) do
+                pcall(function() highlight:Destroy() end)
+            end
+            STATE.itemHighlights = {}
+            STATE.brESP = false
+            notify("Brainrot ESP", "Disabled", 2)
+            return
+        end
+        STATE.brESP = true
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local name = obj.Name
+                if isBrainrotName(name) then
+                    local parent = obj
+                    if obj:IsA("BasePart") then parent = obj end
+                    -- attach Highlight on the Model or Part
+                    local target = obj
+                    if obj:IsA("Model") and obj:FindFirstChildWhichIsA("BasePart") then
+                        target = obj:GetPrimaryPartCFrame() and obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                    end
+                    -- Add Highlight object (works if target is Instance with Parent)
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "KH_ItemHighlight"
+                    highlight.FillColor = Color3.fromRGB(0,120,255)
+                    highlight.OutlineColor = Color3.fromRGB(255, 30, 30)
+                    highlight.Parent = obj
+                    STATE.itemHighlights[obj] = highlight
+                end
+            end
+        end
+        notify("Brainrot ESP", "Enabled (local)", 2)
+    end
+
+    -- FLOAT toggle (VectorForce local on HumanoidRootPart)
+    local function toggleFloat()
+        if not STATE.float.enabled then
+            local char = player.Character or player.CharacterAdded:Wait()
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then notify("Float", "Character not ready.", 2); return end
+            if STATE.float.att then pcall(function() STATE.float.att:Destroy() end) end
+            if STATE.float.vf then pcall(function() STATE.float.vf:Destroy() end) end
+            local att = Instance.new("Attachment", hrp); att.Name = "KH_FloatAttach"
+            local vf = Instance.new("VectorForce", hrp); vf.Attachment0 = att; vf.RelativeTo = Enum.ActuatorRelativeTo.World
+            local mass = hrp:GetMass()
+            vf.Force = Vector3.new(0, mass * workspace.Gravity * STATE.float.strength, 0)
+            STATE.float.att = att; STATE.float.vf = vf; STATE.float.enabled = true
+            notify("Float", "Float enabled — glide mode 🕊️", 2)
+        else
+            if STATE.float.vf then pcall(function() STATE.float.vf:Destroy() end) end
+            if STATE.float.att then pcall(function() STATE.float.att:Destroy() end) end
+            STATE.float.att = nil; STATE.float.vf = nil; STATE.float.enabled = false
+            notify("Float", "Float disabled", 2)
+        end
+    end
+
+    -- Teleport anywhere by tap (touch/click)
+    local teleportConn = nil
+    local function startTeleportTap()
+        notify("Teleport", "Tap/click anywhere to teleport", 3)
+        if teleportConn then pcall(function() teleportConn:Disconnect() end) end
+        teleportConn = UserInputService.InputBegan:Connect(function(input, processed)
+            if processed then return end
+            if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local m = player:GetMouse()
+                if m and m.Hit then
+                    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        hrp.CFrame = CFrame.new(m.Hit.Position + Vector3.new(0, 3, 0))
+                        notify("Teleport", "Teleported to target", 2)
+                    end
+                end
+                if teleportConn then pcall(function() teleportConn:Disconnect() end) end
+                teleportConn = nil
+            end
+        end)
+    end
+
+    -- Special Sauce aura (local visuals + taser scan)
+    local function toggleSpecialSauce()
+        if STATE.special.active then
+            STATE.special.active = false
+            if STATE.special.scanner and STATE.special.scanner.Disconnect then pcall(function() STATE.special.scanner:Disconnect() end) end
+            if STATE.special.aura and STATE.special.aura.Parent then STATE.special.aura:Destroy() end
+            notify("Special Sauce", "Deactivated", 2)
+            return
+        end
+        local char = safeChar()
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then notify("Special Sauce", "Character not ready.", 2); return end
+
+        notify("Special Sauce", "huh I see u tryna steal lol 😈", 3)
+        task.wait(2)
+
+        local ring = createRing(STATE.special.radius, CONF.accent)
+        ring.Position = hrp.Position - Vector3.new(0, 3, 0)
+        ring.Parent = workspace
+        STATE.special.aura = ring
+
+        -- fire particle
+        local flame = Instance.new("ParticleEmitter", hrp)
+        flame.Texture = "rbxassetid://241594408"
+        flame.Rate = 80
+        flame.Lifetime = NumberRange.new(0.9, 1.6)
+        flame.Size = NumberSequence.new(1.1)
+        Debris:AddItem(flame, 12)
+
+        STATE.special.active = true
+
+        -- scanner
+        STATE.special.scanner = RunService.Heartbeat:Connect(function()
+            if not STATE.special.active then return end
+            if not (ring and ring.Parent and hrp and hrp.Parent) then return end
+            ring.Position = hrp.Position - Vector3.new(0, 3, 0)
+            for _, pl in ipairs(Players:GetPlayers()) do
+                if pl ~= player and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+                    local oth = pl.Character.HumanoidRootPart
+                    local dist = (oth.Position - hrp.Position).Magnitude
+                    if dist <= STATE.special.radius then
+                        -- visual bolt
+                        local mag = dist
+                        local bolt = Instance.new("Part", workspace)
+                        bolt.Anchored = true; bolt.CanCollide = false
+                        bolt.Size = Vector3.new(0.2, 0.2, mag)
+                        bolt.Material = Enum.Material.Neon
+                        bolt.Color = Color3.fromRGB(120, 210, 255)
+                        bolt.CFrame = CFrame.new(hrp.Position, oth.Position) * CFrame.new(0,0,-mag/2) * CFrame.Angles(math.pi/2,0,0)
+                        Debris:AddItem(bolt, 0.26)
+
+                        local spark = Instance.new("ParticleEmitter", oth)
+                        spark.Texture = "rbxassetid://256249139"
+                        spark.Rate = 0; spark:Emit(30)
+                        Debris:AddItem(spark, 0.6)
+
+                        notify("TASER", pl.Name .. " triggered the aura (local) ⚡", 2)
+
+                        -- local visual slow (client side)
+                        local hum = pl.Character:FindFirstChildOfClass("Humanoid")
+                        if hum then
+                            local prevWS = hum.WalkSpeed
+                            local prevJP = hum.JumpPower or 50
+                            pcall(function() hum.WalkSpeed = 0; hum.JumpPower = 0 end)
+                            task.delay(2.6, function() pcall(function() if hum then hum.WalkSpeed = prevWS or 16; hum.JumpPower = prevJP end end) end)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- Fire Aura effect
+    local function spawnFireAura()
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then notify("Fire", "Character not ready", 2); return end
+        local hrp = char.HumanoidRootPart
+        local p = Instance.new("Part", workspace)
+        p.Anchored = true; p.CanCollide = false; p.Size = Vector3.new(1,1,1)
+        p.Position = hrp.Position - Vector3.new(0,1,0)
+        local emitter = Instance.new("ParticleEmitter", p)
+        emitter.Texture = "rbxassetid://241594408"
+        emitter.Rate = 120
+        emitter.Lifetime = NumberRange.new(0.8, 1.6)
+        Debris:AddItem(p, 6)
+        notify("Fire", "Temporary fire aura spawned 🔥", 3)
+    end
+
+    -- Final Boss Mode
+    local function doFinalBoss()
+        notify("FINAL BOSS", "Final Boss Mode activated — chaos incoming 💀", 4)
+        playLocalSound(CONF.sounds.bossMusic, playerGui, 1.2, false)
+
+        -- visuals: flash overlay
+        local overlay = Instance.new("ScreenGui", playerGui)
+        overlay.Name = "KH_Flash"
+        local f = Instance.new("Frame", overlay)
+        f.Size = UDim2.new(1,0,1,0); f.BackgroundColor3 = Color3.fromRGB(255, 20, 20); f.BackgroundTransparency = 1; f.ZIndex = 9999
+        tween(f, 0.4, {BackgroundTransparency = 0.45})
+        -- camera shake
+        local cam = workspace.CurrentCamera
+        spawn(function()
+            for i = 1, 30 do
+                if cam and cam.CFrame then
+                    cam.CFrame = cam.CFrame * CFrame.new((math.random()-0.5)*0.6, (math.random()-0.5)*0.6, 0)
+                end
+                task.wait(0.04)
+            end
+        end)
+        -- fire-spark rain
+        local folder = Instance.new("Folder", workspace); folder.Name = "KH_BossRain"
+        for i = 1, 30 do
+            local p = Instance.new("Part", folder)
+            p.Size = Vector3.new(0.6,0.6,0.6); p.Anchored = false; p.CanCollide = false; p.Material = Enum.Material.Neon
+            p.Color = Color3.fromRGB(255,120,60)
+            local basePos = (player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character.HumanoidRootPart.Position) or workspace:GetModelPrimaryPartCFrame() and workspace:GetModelPrimaryPartCFrame().p or workspace.CurrentCamera.CFrame.p
+            p.Position = basePos + Vector3.new(math.random(-30,30), 60 + math.random(0,40), math.random(-30,30))
+            p.Velocity = Vector3.new(0, -60, 0)
+            Debris:AddItem(p, 6)
+        end
+        task.delay(18, function()
+            if overlay and overlay.Parent then overlay:Destroy() end
+            if folder and folder.Parent then folder:Destroy() end
+        end)
+    end
+
+    -- SERVER HOP (basic)
+    local function doServerHop()
+        notify("Server Hop", "Attempting server hop...", 3)
+        pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+    end
+
+    -- TELEPORT to place/instance
+    local function tpToPlace(pid)
+        local id = tonumber(pid)
+        if not id then notify("Teleport", "Invalid place id", 3); return end
+        pcall(function() TeleportService:Teleport(id, player) end)
+    end
+    local function tpToInstance(pid, jobId)
+        local id = tonumber(pid)
+        if not id or not jobId or jobId == "" then notify("Teleport", "PlaceId + JobId required", 3); return end
+        pcall(function() TeleportService:TeleportToPlaceInstance(id, tostring(jobId), player) end)
+    end
+
+    -- Brainrot features
+    local function playMostValuableBrainrot()
+        local mostVal, best = -math.huge, nil
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if isBrainrotName(obj.Name) then
+                if obj:FindFirstChild("Value") and typeof(obj.Value.Value) == "number" then
+                    local v = obj.Value.Value
+                    if v > mostVal then mostVal = v; best = obj end
+                end
+            end
+        end
+        if best and player.Character then
+            -- parent to character (local)
+            pcall(function() best.Parent = player.Character end)
+            local base = workspace:FindFirstChild("Base")
+            if base and base:IsA("BasePart") and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character:PivotTo(base.CFrame)
+            elseif base and base:IsA("Model") and base.PrimaryPart then
+                player.Character:PivotTo(base.PrimaryPart.CFrame)
+            end
+            notify("Brainrot", "Equipped most valuable Brainrot", 3)
+        else
+            notify("Brainrot", "No Brainrot with Value found", 3)
+        end
+    end
+
+    local function stealBrainrots()
+        local names = brainrotListNames
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            for _, n in ipairs(names) do
+                if obj.Name == n then
+                    pcall(function() obj.Parent = player.Character end)
+                end
+            end
+        end
+        notify("Brainrots", "Attempted to steal listed Brainrots (local parent)", 3)
+    end
+
+    local function goBase()
         local base = workspace:FindFirstChild("Base")
-        if base then
-            player.Character:PivotTo(base.CFrame)
+        if base and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if base:IsA("BasePart") then player.Character.HumanoidRootPart.CFrame = base.CFrame
+            elseif base:IsA("Model") and base.PrimaryPart then player.Character.HumanoidRootPart.CFrame = base.PrimaryPart.CFrame end
+            notify("Base", "Teleported to Base", 3)
+        else
+            notify("Base", "Base not found", 3)
         end
     end
-end)
 
-local BrainrotsESPEnabled = false
-makeButton("Brainrots ESP Toggle", function()
-    BrainrotsESPEnabled = not BrainrotsESPEnabled
-    if BrainrotsESPEnabled then
-        for _, item in pairs(workspace:GetDescendants()) do
-            if item.Name:match("Brainrot") or item.Name:match("Tralelero") or item.Name:match("Saturnita") then
-                local h = Instance.new("Highlight")
-                h.FillColor = Color3.fromRGB(0,0,255)
-                h.OutlineColor = Color3.fromRGB(255,0,0)
-                h.Parent = item
+    -- BUILD BUTTONS ON LEFT SCROLL
+    -- Helper to add button and bind callback
+    local function addButton(label, emoji, callback)
+        local b = makeButton(label, emoji)
+        b.Parent = leftScroll
+        b.MouseButton1Click:Connect(function()
+            playLocalSound(CONF.sounds.click, playerGui, 0.9, false)
+            pcall(callback)
+        end)
+        return b
+    end
+
+    -- Add feature buttons (order)
+    addButton("Player ESP Toggle", "📡", function() togglePlayerESP() end)
+    addButton("Brainrots ESP Toggle", "🧠", function() toggleBrainrotESP() end)
+    addButton("Float Toggle", "🕊️", function() toggleFloat() end)
+    addButton("Teleport Anywhere (Tap)", "📍", function() startTeleportTap() end)
+    addButton("Fire Aura", "🔥", function() spawnFireAura() end)
+    addButton("Special Sauce (Toggle)", "🛡️", function() toggleSpecialSauce() end)
+    addButton("Final Boss Mode", "⚔️", function() doFinalBoss() end)
+    addButton("Server Hop", "🔀", function() doServerHop() end)
+
+    -- Teleport to place/instance inputs + buttons
+    local pidBox = Instance.new("TextBox", leftScroll)
+    pidBox.Size = UDim2.new(1, -16, 0, 28); pidBox.PlaceholderText = "Place ID (number)"; pidBox.BackgroundColor3 = Color3.fromRGB(8,8,10); newUICorner(pidBox, 8)
+    local jobBox = Instance.new("TextBox", leftScroll)
+    jobBox.Size = UDim2.new(1, -16, 0, 28); jobBox.PlaceholderText = "JobId (instance) (optional)"; jobBox.BackgroundColor3 = Color3.fromRGB(8,8,10); newUICorner(jobBox, 8)
+    addButton("Teleport to Place", "🛰️", function() tpToPlace(pidBox.Text) end)
+    addButton("Teleport to Instance", "🔗", function() tpToInstance(pidBox.Text, jobBox.Text) end)
+
+    -- Brainrot buttons
+    addButton("Play Most Valuable Brainrot", "🏆", function() playMostValuableBrainrot() end)
+    addButton("Steal Brainrots", "🤝", function() stealBrainrots() end)
+    addButton("Go Base", "📦", function() goBase() end)
+
+    -- Header control wireups
+    btnMin.MouseButton1Click:Connect(function()
+        if window.Size.Y.Offset > 40 then
+            tween(window, 0.2, {Size = UDim2.new(window.Size.X.Scale, window.Size.X.Offset, 0, 48)})
+        else
+            tween(window, 0.2, {Size = UDim2.new(window.Size.X.Scale, window.Size.X.Offset, 0, 240)})
+        end
+    end)
+    btnToggle.MouseButton1Click:Connect(function() window.Visible = not window.Visible end)
+    btnDestroy.MouseButton1Click:Connect(function()
+        notify("Karker Hub", "Destroying hub and cleaning up...", 2)
+        -- cleanup
+        STATE.destroyed = true
+        if STATE.special.scanner and STATE.special.scanner.Disconnect then pcall(function() STATE.special.scanner:Disconnect() end) end
+        if STATE.conns.rainbow then pcall(function() STATE.conns.rainbow:Disconnect() end) end
+        for _, p in ipairs(STATE.parts) do pcall(function() if p and p.Parent then p:Destroy() end end) end
+        STATE.parts = {}
+        for pl, h in pairs(STATE.playerHighlights) do pcall(function() if h and h.Parent then h:Destroy() end end) end
+        for item, h in pairs(STATE.itemHighlights) do pcall(function() if h and h.Parent then h:Destroy() end end) end
+        if gui and gui.Parent then gui:Destroy() end
+    end)
+
+    -- respawn handling for float reattach
+    Players.LocalPlayer.CharacterAdded:Connect(function(char)
+        task.delay(0.5, function()
+            if STATE.float.enabled then
+                if STATE.float.att then pcall(function() STATE.float.att:Destroy() end) end
+                if STATE.float.vf then pcall(function() STATE.float.vf:Destroy() end) end
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local att = Instance.new("Attachment", hrp); STATE.float.att = att
+                    local vf = Instance.new("VectorForce", hrp); vf.Attachment0 = att; vf.RelativeTo = Enum.ActuatorRelativeTo.World
+                    local mass = hrp:GetMass()
+                    vf.Force = Vector3.new(0, mass * workspace.Gravity * STATE.float.strength, 0)
+                    STATE.float.vf = vf
+                end
             end
-        end
-    else
-        for _, item in pairs(workspace:GetDescendants()) do
-            for _, v in pairs(item:GetChildren()) do
-                if v:IsA("Highlight") then v:Destroy() end
-            end
-        end
-    end
+        end)
+    end)
+
+    -- keep reference for cleanup
+    STATE.gui = gui
+    table.insert(STATE.parts, gui)
+end
+
+-- START: spawn loading then build hub
+spawnLoading(function()
+    if STATE.destroyed then return end
+    buildHub()
+    notify("Welcome", ("Welcome %s — Karker Hub Mobile loaded. Created by YOUNG 🎉"):format(player.Name), 4)
+    playLocalSound(CONF.sounds.vine, playerGui, 0.8, false)
 end)
 
-makeButton("Steal Brainrots", function()
-    local valuableBrainrots = {"Tralelero", "Saturnita", "Balerina Capucina", "Coco Fanto Ele Fanto", "orcalero Orcala", "odin din dun", "Dragons"}
-    for _, item in pairs(workspace:GetDescendants()) do
-        for _, brainrot in pairs(valuableBrainrots) do
-            if item.Name == brainrot then
-                item.Parent = player.Character
-            end
-        end
-    end
-end)
+-- Expose cleanup function
+_G.KarkerHubMobileCleanup = function()
+    if STATE.destroyed then return end
+    STATE.destroyed = true
+    for _, p in ipairs(STATE.parts) do pcall(function() if p and p.Parent then p:Destroy() end end) end
+    STATE.parts = {}
+    for _, v in pairs(STATE.playerHighlights) do pcall(function() if v and v.Parent then v:Destroy() end end) end
+    for _, v in pairs(STATE.itemHighlights) do pcall(function() if v and v.Parent then v:Destroy() end end) end
+    if STATE.gui and STATE.gui.Parent then STATE.gui:Destroy() end
+end
 
-makeButton("Go Base", function()
-    local base = workspace:FindFirstChild("Base")
-    if base and player.Character then
-        player.Character:PivotTo(base.CFrame)
-    end
-end)
-
-notify("Karker Hub", "Loaded successfully ✅", 5)
+-- End of script
