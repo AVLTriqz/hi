@@ -1,630 +1,299 @@
--- Karker Hub v4.0 - Verbose Expanded Edition
--- Long-form, fully expanded, verbose and explicit definitions
--- This file intentionally verbose to help people who prefer to read everything in-line.
--- Author: YOUNG (expanded)
+-- // Karker Hub v5 - THE WORLD'S BEST SCRIPT (Mobile + PC) // --
+-- Created by YOUNG (polished by YOUNG)
+-- Features: Snowy Loading Screen ❄️ | Fire Aura 🔥 | Taser Aura ⚡ | Private TP | Smooth Notifications | Mobile Friendly
 
--- NOTE: This script is a LocalScript intended for StarterPlayerScripts or StarterGui.
--- It contains both client-side visuals and placeholders where server-side security would be required.
-
--- =====================================================================
--- SECTION 0: SERVICES & SHORTCUTS (explicitly spelled out)
--- =====================================================================
+-- // Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 
--- Player reference
 local player = Players.LocalPlayer
-if not player then
-    -- Wait for player to exist (rare in LocalScript when placed correctly)
-    player = Players.PlayerAdded:Wait()
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- // Tween Helper
+local function tween(obj, time, props, style)
+    TweenService:Create(obj, TweenInfo.new(time, style or Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
 end
 
--- Helper function to safely get character
-local function getCharacter(waitFor)
-    waitFor = waitFor == nil and true or waitFor
-    if player.Character and player.Character.Parent then
-        return player.Character
+-- // UICorner Helper
+local function roundify(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 12)
+    c.Parent = parent
+end
+
+-- ============================================================
+-- LOADING SCREEN ❄️
+-- ============================================================
+
+local loadingGui = Instance.new("ScreenGui", playerGui)
+loadingGui.IgnoreGuiInset = true
+loadingGui.ResetOnSpawn = false
+loadingGui.Name = "KH_Loading"
+
+local bg = Instance.new("Frame", loadingGui)
+bg.Size = UDim2.new(1,0,1,0)
+bg.BackgroundColor3 = Color3.fromRGB(15,15,15)
+
+local loadingText = Instance.new("TextLabel", bg)
+loadingText.Size = UDim2.new(1,0,0,60)
+loadingText.Position = UDim2.new(0,0,0.45,0)
+loadingText.BackgroundTransparency = 1
+loadingText.Font = Enum.Font.GothamBold
+loadingText.TextSize = 26
+loadingText.TextColor3 = Color3.new(1,1,1)
+loadingText.Text = ""
+
+-- Snowfall ❄️
+local snowFolder = Instance.new("Folder", bg)
+task.spawn(function()
+    while bg.Parent do
+        local snow = Instance.new("Frame", snowFolder)
+        snow.Size = UDim2.new(0, math.random(4,8), 0, math.random(4,8))
+        snow.Position = UDim2.new(math.random(), 0, -0.1, 0)
+        snow.BackgroundColor3 = Color3.fromRGB(255,255,255)
+        snow.BorderSizePixel = 0
+        snow.BackgroundTransparency = 0.2
+        snow.ZIndex = 10
+
+        local drift = math.random(-60,60)
+        tween(snow, math.random(3,6), {
+            Position = UDim2.new(snow.Position.X.Scale, drift, 1.1, 0),
+            BackgroundTransparency = 1
+        })
+        Debris:AddItem(snow, 6)
+        task.wait(0.1)
     end
-    if waitFor then
-        return player.CharacterAdded:Wait()
-    else
-        return nil
+end)
+
+-- Funny Typewriter Joke
+local msg = "LOADING KARKER HUB... PLEASE WAIT WHILE WE STEAL YOUR PETS LOL"
+task.spawn(function()
+    for i=1,#msg do
+        loadingText.Text = string.sub(msg,1,i)
+        task.wait(0.05)
     end
-end
+    task.wait(2)
+    -- Fade Out
+    tween(bg,1,{BackgroundTransparency=1})
+    tween(loadingText,1,{TextTransparency=1})
+    for _,s in ipairs(snowFolder:GetChildren()) do
+        tween(s,1,{BackgroundTransparency=1})
+    end
+    task.wait(1.2)
+    loadingGui:Destroy()
+end)
 
--- =====================================================================
--- SECTION 1: TWEEN UTILITY (explicit creation per call)
--- =====================================================================
-local function Tween(obj, duration, properties, easingStyle, easingDir)
-    easingStyle = easingStyle or Enum.EasingStyle.Quad
-    easingDir = easingDir or Enum.EasingDirection.Out
-    local info = TweenInfo.new(duration, easingStyle, easingDir)
-    local t = TweenService:Create(obj, info, properties)
-    t:Play()
-    return t
-end
+-- ============================================================
+-- NOTIFICATIONS (Bottom Left)
+-- ============================================================
 
--- =====================================================================
--- SECTION 2: UI CREATION - NOTIFICATIONS (explicit, step-by-step)
--- =====================================================================
-local function createNotificationsGui()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "KH_Notifications_Verbose"
-    gui.ResetOnSpawn = false
-    gui.Parent = player:WaitForChild("PlayerGui")
+local notifGui = Instance.new("ScreenGui", playerGui)
+notifGui.Name = "KH_Notifs"
+notifGui.ResetOnSpawn = false
 
-    local holder = Instance.new("Frame", gui)
-    holder.Name = "Holder"
-    holder.AnchorPoint = Vector2.new(0,1)
-    holder.Position = UDim2.new(0, 16, 1, -16)
-    holder.Size = UDim2.new(0, 320, 0, 260)
-    holder.BackgroundTransparency = 1
+local holder = Instance.new("Frame", notifGui)
+holder.Size = UDim2.new(0,260,0,300)
+holder.Position = UDim2.new(0,15,1,-15)
+holder.AnchorPoint = Vector2.new(0,1)
+holder.BackgroundTransparency = 1
 
-    local layout = Instance.new("UIListLayout", holder)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Padding = UDim.new(0,8)
+local layout = Instance.new("UIListLayout", holder)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0,8)
 
-    return gui, holder
-end
-
-local notGui, notHolder = createNotificationsGui()
-
-local function createNotification(title, text, duration)
+local function notify(title, msg, duration)
     duration = duration or 4
-    local frame = Instance.new("Frame")
+    local frame = Instance.new("Frame", holder)
     frame.Size = UDim2.new(1,0,0,0)
-    frame.BackgroundColor3 = Color3.fromRGB(24,24,24)
+    frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
     frame.BorderSizePixel = 0
-    frame.ClipsDescendants = true
-    frame.LayoutOrder = tick()
-    frame.Parent = notHolder
+    roundify(frame,12)
 
-    local corner = Instance.new("UICorner", frame)
-    corner.CornerRadius = UDim.new(0,10)
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1,-10,1,-10)
+    lbl.Position = UDim2.new(0,5,0,5)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.Gotham
+    lbl.Text = "📢 "..title.."\n"..msg
+    lbl.TextSize = 14
+    lbl.TextWrapped = true
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextYAlignment = Enum.TextYAlignment.Top
 
-    local titleLabel = Instance.new("TextLabel", frame)
-    titleLabel.Size = UDim2.new(1, -12, 0, 20)
-    titleLabel.Position = UDim2.new(0,6,0,6)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.Text = title or "Notice"
-    titleLabel.TextColor3 = Color3.fromRGB(255,200,50)
-    titleLabel.TextSize = 16
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-    local body = Instance.new("TextLabel", frame)
-    body.Size = UDim2.new(1,-12,0,48)
-    body.Position = UDim2.new(0,6,0,26)
-    body.BackgroundTransparency = 1
-    body.Font = Enum.Font.Gotham
-    body.Text = text or ""
-    body.TextSize = 14
-    body.TextColor3 = Color3.fromRGB(235,235,235)
-    body.TextWrapped = true
-    body.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- animate expand
-    Tween(frame, 0.28, {Size = UDim2.new(1,0,0,76)})
-
-    -- auto remove
-    task.delay(duration, function()
-        Tween(frame, 0.2, {Size = UDim2.new(1,0,0,0)})
-        task.wait(0.22)
+    tween(frame,0.25,{Size=UDim2.new(1,0,0,60)})
+    task.delay(duration,function()
+        tween(frame,0.25,{Size=UDim2.new(1,0,0,0)})
+        task.wait(0.3)
         frame:Destroy()
     end)
 end
 
--- Convenience wrapper
-local function notify(title, text, dur)
-    pcall(function()
-        createNotification(title, text, dur)
+-- ============================================================
+-- MAIN HUB GUI
+-- ============================================================
+
+local mainGui = Instance.new("ScreenGui", playerGui)
+mainGui.Name = "KarkerHub_Main"
+mainGui.ResetOnSpawn = false
+
+local window = Instance.new("Frame", mainGui)
+window.Size = UDim2.new(0,360,0,420)
+window.Position = UDim2.new(0.5,-180,0.5,-210)
+window.AnchorPoint = Vector2.new(0.5,0.5)
+window.BackgroundColor3 = Color3.fromRGB(20,20,20)
+roundify(window,16)
+
+-- Dragging (Mobile + PC)
+do
+    local dragging, dragStart, startPos
+    local function update(input)
+        local delta = input.Position - dragStart
+        window.Position = UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
+    end
+    window.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+            dragging=true
+            dragStart=input.Position
+            startPos=window.Position
+            input.Changed:Connect(function()
+                if input.UserInputState==Enum.UserInputState.End then
+                    dragging=false
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseMovement) then
+            update(input)
+        end
     end)
 end
 
--- =====================================================================
--- SECTION 3: LOADING SCREEN (expanded, long-form with many steps)
--- =====================================================================
-local function createLoadingScreen()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "KH_Loading_Verbose"
-    gui.ResetOnSpawn = false
-    gui.Parent = player:WaitForChild("PlayerGui")
+-- Header
+local header = Instance.new("Frame", window)
+header.Size = UDim2.new(1,0,0,50)
+header.BackgroundColor3 = Color3.fromRGB(35,35,35)
+roundify(header,12)
 
-    -- background frame (full screen)
-    local bg = Instance.new("Frame", gui)
-    bg.Name = "Background"
-    bg.Size = UDim2.new(1,0,1,0)
-    bg.Position = UDim2.new(0,0,0,0)
-    bg.BackgroundColor3 = Color3.fromRGB(12,12,12)
-    bg.BorderSizePixel = 0
+local title = Instance.new("TextLabel", header)
+title.Size = UDim2.new(1,-40,1,0)
+title.Position = UDim2.new(0,12,0,0)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.Text = "🔥 Karker Hub 🔥"
+title.TextSize = 18
+title.TextColor3 = Color3.new(1,1,1)
+title.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- decorative vignette image
-    local vign = Instance.new("ImageLabel", bg)
-    vign.Name = "Vignette"
-    vign.Size = UDim2.new(1.4,0,1.4,0)
-    vign.Position = UDim2.new(-0.2,0,-0.2,0)
-    vign.Image = "rbxassetid://5058094581"
-    vign.BackgroundTransparency = 1
-    vign.ImageTransparency = 0.6
+-- Close
+local closeBtn = Instance.new("TextButton", header)
+closeBtn.Size = UDim2.new(0,32,0,32)
+closeBtn.Position = UDim2.new(1,-40,0.5,-16)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 16
+closeBtn.BackgroundColor3 = Color3.fromRGB(50,0,0)
+roundify(closeBtn,8)
+closeBtn.MouseButton1Click:Connect(function()
+    window.Visible=false
+end)
 
-    -- cinematic center label
-    local center = Instance.new("TextLabel", bg)
-    center.Name = "CenterMessage"
-    center.Size = UDim2.new(1,0,0,120)
-    center.Position = UDim2.new(0,0,0.42,0)
-    center.BackgroundTransparency = 1
-    center.Font = Enum.Font.GothamBlack
-    center.TextSize = 26
-    center.TextColor3 = Color3.fromRGB(255,255,255)
-    center.Text = ""
-    center.TextWrapped = true
+-- Scrollable content
+local scroll = Instance.new("ScrollingFrame", window)
+scroll.Size = UDim2.new(1,-20,1,-70)
+scroll.Position = UDim2.new(0,10,0,60)
+scroll.BackgroundTransparency=1
+scroll.CanvasSize=UDim2.new(0,0,0,600)
+scroll.ScrollBarThickness=6
+local layout = Instance.new("UIListLayout", scroll)
+layout.Padding=UDim.new(0,12)
 
-    -- snow particle setup (attached to invisible part)
-    local snowAnchor = Instance.new("Part")
-    snowAnchor.Name = "KH_SnowAnchor"
-    snowAnchor.Anchored = true
-    snowAnchor.CanCollide = false
-    snowAnchor.Transparency = 1
-    snowAnchor.Size = Vector3.new(120, 2, 120)
-    snowAnchor.CFrame = workspace.CurrentCamera and workspace.CurrentCamera.CFrame or CFrame.new(0,100,0)
-    snowAnchor.Parent = workspace
+-- Button Factory
+local function makeBtn(text,callback)
+    local btn = Instance.new("TextButton", scroll)
+    btn.Size=UDim2.new(1,-10,0,50)
+    btn.Text=text
+    btn.Font=Enum.Font.GothamBold
+    btn.TextSize=18
+    btn.TextColor3=Color3.new(1,1,1)
+    btn.BackgroundColor3=Color3.fromRGB(45,45,45)
+    roundify(btn,12)
+    btn.MouseButton1Click:Connect(function()
+        tween(btn,0.1,{BackgroundColor3=Color3.fromRGB(100,30,30)})
+        task.wait(0.15)
+        tween(btn,0.2,{BackgroundColor3=Color3.fromRGB(45,45,45)})
+        callback()
+    end)
+    return btn
+end
 
-    local p = Instance.new("ParticleEmitter", snowAnchor)
-    p.Texture = "rbxassetid://241594314"
-    p.Rate = 40
-    p.Lifetime = NumberRange.new(4,8)
-    p.Speed = NumberRange.new(2,6)
-    p.Size = NumberSequence.new(0.8)
-    p.VelocitySpread = 180
+-- ============================================================
+-- BUTTON LOGIC
+-- ============================================================
 
-    -- typewriter function (explicit char loop)
-    local text = "KARKER HUB LOADING... PLEASE WAIT" 
+-- Special Sauce 🔥
+makeBtn("Special Sauce", function()
+    notify("Special Sauce","Huh, I see u tryna steal lol",3)
+    task.wait(2)
+    -- Fire aura effect
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    for i=1,12 do
+        local fire = Instance.new("ParticleEmitter", hrp)
+        fire.Texture="rbxassetid://241594408"
+        fire.Lifetime=NumberRange.new(1)
+        fire.Speed=NumberRange.new(0)
+        fire.Rate=30
+        fire.Rotation=NumberRange.new(0,360)
+        fire.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,0)})
+        Debris:AddItem(fire,3)
+    end
+end)
+
+-- Taser Aura ⚡
+makeBtn("Taser Aura", function()
+    notify("Taser Aura","Zapping nearby players ⚡",4)
     task.spawn(function()
-        for i = 1, #text do
-            center.Text = string.sub(text,1,i)
-            task.wait(0.035)
-        end
-        task.wait(1.1)
-        -- fade out whole screen
-        Tween(bg, 0.9, {BackgroundTransparency = 1})
-        Tween(vign, 0.9, {ImageTransparency = 1})
-        Tween(center, 0.9, {TextTransparency = 1})
-        task.wait(1.05)
-        -- cleanup
-        if snowAnchor and snowAnchor.Parent then snowAnchor:Destroy() end
-        if gui and gui.Parent then gui:Destroy() end
-    end)
-end
-
--- create loading screen and block further UI creation until destroyed
-createLoadingScreen()
-
--- wait some time to ensure loading UI is visible (but in the verbose version we will chain spawn of main UI when loading finishes)
--- we'll listen for the loading GUI removal to initialize the main hub
-
--- =====================================================================
--- SECTION 4: MAIN GUI (very verbose explicit creation for every element)
--- =====================================================================
-
-local function createMainGui()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "KarkerHub_Main_Verbose"
-    gui.ResetOnSpawn = false
-    gui.Parent = player:WaitForChild("PlayerGui")
-
-    -- window frame
-    local window = Instance.new("Frame", gui)
-    window.Name = "Window"
-    window.Size = UDim2.new(0, 680, 0, 480)
-    window.Position = UDim2.new(0.5, -340, 0.6, 0)
-    window.AnchorPoint = Vector2.new(0.5,0.5)
-    window.BackgroundColor3 = Color3.fromRGB(18,18,18)
-    window.BorderSizePixel = 0
-
-    local windowCorner = Instance.new("UICorner", window)
-    windowCorner.CornerRadius = UDim.new(0, 18)
-
-    local windowStroke = Instance.new("UIStroke", window)
-    windowStroke.Color = Color3.fromRGB(36,36,36)
-    windowStroke.Thickness = 1
-
-    -- header area
-    local header = Instance.new("Frame", window)
-    header.Name = "Header"
-    header.Size = UDim2.new(1,0,0,64)
-    header.Position = UDim2.new(0,0,0,0)
-    header.BackgroundTransparency = 1
-
-    local title = Instance.new("TextLabel", header)
-    title.Name = "Title"
-    title.Size = UDim2.new(0.6,0,1,0)
-    title.Position = UDim2.new(0.04,0,0,0)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamBlack
-    title.TextSize = 22
-    title.TextColor3 = Color3.fromRGB(255,255,255)
-    title.Text = "Karker Hub - Verbose Edition"
-
-    local subtitle = Instance.new("TextLabel", header)
-    subtitle.Size = UDim2.new(0.28,0,1,0)
-    subtitle.Position = UDim2.new(0.66,0,0,0)
-    subtitle.BackgroundTransparency = 1
-    subtitle.Font = Enum.Font.Gotham
-    subtitle.TextSize = 12
-    subtitle.TextColor3 = Color3.fromRGB(160,160,160)
-    subtitle.TextXAlignment = Enum.TextXAlignment.Right
-    subtitle.Text = "v4.0 - Long Form"
-
-    -- close and minimize
-    local closeBtn = Instance.new("TextButton", header)
-    closeBtn.Name = "Close"
-    closeBtn.Size = UDim2.new(0,44,0,32)
-    closeBtn.Position = UDim2.new(1, -56, 0.12, 0)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(44,44,44)
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.Text = "X"
-    local closeCorner = Instance.new("UICorner", closeBtn)
-    closeCorner.CornerRadius = UDim.new(0,8)
-
-    local minBtn = Instance.new("TextButton", header)
-    minBtn.Name = "Minimize"
-    minBtn.Size = UDim2.new(0,44,0,32)
-    minBtn.Position = UDim2.new(1, -112, 0.12, 0)
-    minBtn.BackgroundColor3 = Color3.fromRGB(44,44,44)
-    minBtn.Font = Enum.Font.GothamBold
-    minBtn.Text = "_"
-    local minCorner = Instance.new("UICorner", minBtn)
-    minCorner.CornerRadius = UDim.new(0,8)
-
-    -- content area (left navigation + right panels)
-    local left = Instance.new("Frame", window)
-    left.Name = "LeftPanel"
-    left.Size = UDim2.new(0, 220, 1, -92)
-    left.Position = UDim2.new(0, 20, 0, 84)
-    left.BackgroundTransparency = 1
-
-    local right = Instance.new("Frame", window)
-    right.Name = "RightPanel"
-    right.Size = UDim2.new(1, -280, 1, -92)
-    right.Position = UDim2.new(0, 260, 0, 84)
-    right.BackgroundTransparency = 1
-
-    -- left: buttons area with scrolling
-    local leftScroll = Instance.new("ScrollingFrame", left)
-    leftScroll.Size = UDim2.new(1,0,1,0)
-    leftScroll.CanvasSize = UDim2.new(0,0,0,900)
-    leftScroll.ScrollBarThickness = 8
-    leftScroll.BackgroundTransparency = 1
-    local leftLayout = Instance.new("UIListLayout", leftScroll)
-    leftLayout.Padding = UDim.new(0,12)
-    leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-    -- helper to make very explicit animated buttons
-    local function makeAnimatedButton(parent, text, order)
-        local container = Instance.new("Frame", parent)
-        container.Size = UDim2.new(1,0,0,62)
-        container.BackgroundTransparency = 1
-        container.LayoutOrder = order or 1
-
-        local btn = Instance.new("TextButton", container)
-        btn.Size = UDim2.new(0.96,0,0,56)
-        btn.Position = UDim2.new(0.02,0,0,0)
-        btn.BackgroundColor3 = Color3.fromRGB(36,36,36)
-        btn.BorderSizePixel = 0
-        btn.Font = Enum.Font.GothamSemibold
-        btn.Text = text
-        btn.TextSize = 16
-        btn.TextColor3 = Color3.fromRGB(245,245,245)
-        btn.AutoButtonColor = false
-
-        local ucorner = Instance.new("UICorner", btn)
-        ucorner.CornerRadius = UDim.new(0,10)
-        local stroke = Instance.new("UIStroke", btn)
-        stroke.Color = Color3.fromRGB(28,28,28)
-        stroke.Thickness = 1
-
-        -- hover & click animations
-        btn.MouseEnter:Connect(function()
-            Tween(btn, 0.14, {BackgroundColor3 = Color3.fromRGB(58,58,58), Size = UDim2.new(0.965,0,0,58)})
-        end)
-        btn.MouseLeave:Connect(function()
-            Tween(btn, 0.14, {BackgroundColor3 = Color3.fromRGB(36,36,36), Size = UDim2.new(0.96,0,0,56)})
-        end)
-        btn.MouseButton1Down:Connect(function()
-            Tween(btn, 0.06, {Size = UDim2.new(0.94,0,0,54)})
-        end)
-        btn.MouseButton1Up:Connect(function()
-            Tween(btn, 0.08, {Size = UDim2.new(0.96,0,0,56)})
-        end)
-
-        return btn, container
-    end
-
-    -- create many buttons explicitly (to make verbose)
-    local b1 = makeAnimatedButton(leftScroll, "Special Sauce", 1)
-    local b2 = makeAnimatedButton(leftScroll, "Toggle Float (Jumpable)", 2)
-    local b3 = makeAnimatedButton(leftScroll, "Bypass Float (Disable)", 3)
-    local b4 = makeAnimatedButton(leftScroll, "Unbypass Float (Allow)", 4)
-    local b5 = makeAnimatedButton(leftScroll, "Throw Aura", 5)
-    local b6 = makeAnimatedButton(leftScroll, "Server Hop (paste instance)", 6)
-    local b7 = makeAnimatedButton(leftScroll, "Executor (placeholder)", 7)
-    local b8 = makeAnimatedButton(leftScroll, "Credits", 8)
-
-    -- right: info panel and preview
-    local preview = Instance.new("Frame", right)
-    preview.Size = UDim2.new(1,0,0,260)
-    preview.Position = UDim2.new(0,0,0,0)
-    preview.BackgroundColor3 = Color3.fromRGB(20,20,20)
-    local pc = Instance.new("UICorner", preview); pc.CornerRadius = UDim.new(0,8)
-
-    local infoTitle = Instance.new("TextLabel", preview)
-    infoTitle.Size = UDim2.new(1,-20,0,36)
-    infoTitle.Position = UDim2.new(0,10,0,8)
-    infoTitle.BackgroundTransparency = 1
-    infoTitle.Font = Enum.Font.GothamBold
-    infoTitle.TextSize = 18
-    infoTitle.TextColor3 = Color3.fromRGB(255,255,255)
-    infoTitle.Text = "Preview & Controls"
-
-    local infoBody = Instance.new("TextLabel", preview)
-    infoBody.Size = UDim2.new(1,-20,1,-56)
-    infoBody.Position = UDim2.new(0,10,0,48)
-    infoBody.BackgroundTransparency = 1
-    infoBody.Font = Enum.Font.Gotham
-    infoBody.TextSize = 14
-    infoBody.TextColor3 = Color3.fromRGB(200,200,200)
-    infoBody.TextWrapped = true
-    infoBody.Text = "Use the left buttons to toggle features. Special Sauce will create an aura that locally tases intruders. For authoritative actions, use a server script with RemoteEvents."
-
-    -- footer & credits
-    local foot = Instance.new("TextLabel", window)
-    foot.Size = UDim2.new(1,-40,0,28)
-    foot.Position = UDim2.new(0,20,1,-40)
-    foot.BackgroundTransparency = 1
-    foot.Font = Enum.Font.Gotham
-    foot.TextSize = 12
-    foot.TextColor3 = Color3.fromRGB(150,150,150)
-    foot.Text = "Karker Hub - Verbose UI (expanded)"
-
-    -- Draggable header implementation for both PC & Mobile
-    do
-        local dragging = false
-        local dragStart
-        local startPos
-        header.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart = input.Position
-                startPos = window.Position
-                input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                    end
-                end)
-            end
-        end)
-        header.InputChanged:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                -- store for move
-                -- nothing here - we use global InputChanged
-            end
-        end)
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                local delta = input.Position - dragStart
-                window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-            end
-        end)
-    end
-
-    -- Provide explicit API functions for actions (float, aura, server hop)
-    local floatState = {enabled = false, vf = nil, att = nil}
-    local function enableFloatVerbose()
-        if floatState.enabled then
-            notify("Float", "Float already enabled.", 2)
-            return
-        end
-        local character = getCharacter(true)
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if not hrp then notify("Float", "HRP not found.", 2); return end
-        local attach = Instance.new("Attachment", hrp)
-        attach.Name = "KH_FloatAttach_Verbose"
-        local vf = Instance.new("VectorForce", hrp)
-        vf.Attachment0 = attach
-        vf.RelativeTo = Enum.ActuatorRelativeTo.World
-        local mass = hrp:GetMass()
-        vf.Force = Vector3.new(0, mass * 196.2 * 0.55, 0)
-        floatState = {enabled = true, vf = vf, att = attach}
-        notify("Float", "Float enabled (jumpable).", 3)
-    end
-    local function disableFloatVerbose()
-        if floatState.att then pcall(function() floatState.att:Destroy() end) end
-        if floatState.vf then pcall(function() floatState.vf:Destroy() end) end
-        floatState = {enabled=false, vf=nil, att=nil}
-        notify("Float", "Float disabled.", 2)
-    end
-
-    -- Throw aura explicit
-    local function throwAuraVerbose()
-        local character = getCharacter(true)
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if not hrp then notify("Aura", "Character not ready.", 2); return end
-        local emitter = Instance.new("ParticleEmitter", hrp)
-        emitter.Texture = "rbxassetid://243660277"
-        emitter.Rate = 0
-        emitter.Lifetime = NumberRange.new(0.6, 1)
-        emitter.Speed = NumberRange.new(8, 14)
-        emitter.Size = NumberSequence.new(0.8)
-        emitter:Emit(45)
-        Debris:AddItem(emitter, 1.2)
-        local bv = Instance.new("BodyVelocity", hrp)
-        bv.MaxForce = Vector3.new(2500,2500,2500)
-        bv.Velocity = hrp.CFrame.LookVector * 18 + Vector3.new(0,6,0)
-        Debris:AddItem(bv, 0.28)
-        notify("Throw Aura", "Aura thrown.", 2)
-    end
-
-    -- Special sauce: verbose local aura + scan
-    local special = {active=false, radius=24, conns={}, auraPart=nil}
-    local function startSpecialVerbose()
-        if special.active then notify("Special Sauce","Already active.",2); return end
-        local character = getCharacter(true)
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if not hrp then notify("Special Sauce","Character not ready.",2); return end
-
-        -- aura part creation
-        local aura = Instance.new("Part")
-        aura.Name = "KH_SpecialAura_Verbose"
-        aura.Anchored = true
-        aura.CanCollide = false
-        aura.Size = Vector3.new(special.radius*2 + 8, 1, special.radius*2 + 8)
-        aura.Transparency = 1
-        aura.Parent = workspace
-        special.auraPart = aura
-
-        -- particle ring on aura
-        local ring = Instance.new("ParticleEmitter", aura)
-        ring.Texture = "rbxassetid://296874371"
-        ring.Rate = 45
-        ring.Lifetime = NumberRange.new(0.8,1.4)
-        ring.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,2.2), NumberSequenceKeypoint.new(1,0)})
-        ring.Color = ColorSequence.new(Color3.fromRGB(255,140,30), Color3.fromRGB(255,60,20))
-        ring.EmissionDirection = Enum.NormalId.Top
-
-        -- fire light
-        local pl = Instance.new("PointLight", aura)
-        pl.Brightness = 1.6
-        pl.Range = 18
-        pl.Color = Color3.fromRGB(255,140,60)
-
-        -- big center notification
-        notify("Special Sauce", "huh I see u tryna steal lol", 3)
-        task.wait(2)
-        notify("Special Sauce", "System active. Scanning for intruders...", 3)
-
-        -- scanning loop
-        local last = {}
-        local conn = RunService.Heartbeat:Connect(function()
-            if not special.active then conn:Disconnect(); return end
-            if hrp and aura and aura.Parent then
-                aura.CFrame = hrp.CFrame * CFrame.new(0, -3.5, 0)
-            end
-            for _,plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                    local ohrp = plr.Character.HumanoidRootPart
-                    local d = (ohrp.Position - hrp.Position).Magnitude
-                    if d <= special.radius then
-                        local now = tick()
-                        if not last[plr] or (now - last[plr] > 4) then
-                            last[plr] = now
-                            -- local taser visual
-                            local bolt = Instance.new("Part", workspace)
-                            bolt.Anchored = true
-                            bolt.CanCollide = false
-                            bolt.Size = Vector3.new(0.4,0.4,(ohrp.Position - hrp.Position).Magnitude)
-                            bolt.CFrame = CFrame.new(hrp.Position, ohrp.Position) * CFrame.new(0,0,-bolt.Size.Z/2) * CFrame.Angles(math.pi/2,0,0)
-                            bolt.Material = Enum.Material.Neon
-                            bolt.Color = Color3.fromRGB(120,200,255)
-                            Debris:AddItem(bolt, 0.28)
-
-                            local spark = Instance.new("ParticleEmitter", ohrp)
-                            spark.Texture = "rbxassetid://256249139"
-                            spark.Rate = 0
-                            spark:Emit(40)
-                            Debris:AddItem(spark, 0.6)
-
-                            -- notify local: whom was affected
-                            notify("Taser", plr.Name .. " triggered the aura (local visual)", 2)
-
-                            -- NOTE: this is local visual only. To affect other players server-side, use RemoteEvent and server script.
+        while task.wait(1) do
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                for _,p in ipairs(Players:GetPlayers()) do
+                    if p~=player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local dist = (char.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                        if dist < 12 then
+                            local bolt = Instance.new("Beam", char.HumanoidRootPart)
+                            bolt.Attachment0=Instance.new("Attachment",char.HumanoidRootPart)
+                            bolt.Attachment1=Instance.new("Attachment",p.Character.HumanoidRootPart)
+                            bolt.Color=ColorSequence.new(Color3.new(1,1,0))
+                            bolt.Width0=0.2
+                            bolt.Width1=0.2
+                            Debris:AddItem(bolt,0.5)
                         end
                     end
                 end
             end
-        end)
-
-        table.insert(special.conns, conn)
-        special.active = true
-
-        -- auto stop after 90 seconds
-        task.delay(90, function()
-            if special.active then
-                for _,c in ipairs(special.conns) do if c then pcall(function() c:Disconnect() end) end end
-                if special.auraPart and special.auraPart.Parent then special.auraPart:Destroy() end
-                special = {active=false, radius=24, conns={}, auraPart=nil}
-                notify("Special Sauce","Special system auto-stopped.",2)
-            end
-        end)
-    end
-
-    local function stopSpecialVerbose()
-        for _,c in ipairs(special.conns) do if c then pcall(function() c:Disconnect() end) end end
-        special.conns = {}
-        if special.auraPart and special.auraPart.Parent then special.auraPart:Destroy() end
-        special = {active=false, radius=24, conns={}, auraPart=nil}
-        notify("Special Sauce","Stopped.",2)
-    end
-
-    -- wire button actions
-    b1.MouseButton1Click:Connect(function() startSpecialVerbose() end)
-    b2.MouseButton1Click:Connect(function()
-        if floatState.enabled then disableFloatVerbose() else enableFloatVerbose() end
-    end)
-    b3.MouseButton1Click:Connect(function() disableFloatVerbose(); notify("Bypass","Float disabled (bypassed).",3) end)
-    b4.MouseButton1Click:Connect(function() notify("Bypass","Float allowed. Enable manually.",3) end)
-    b5.MouseButton1Click:Connect(function() throwAuraVerbose() end)
-    b6.MouseButton1Click:Connect(function()
-        notify("Server Hop","Paste a server instance ID in the in-game chat to use TeleportService manually.",6)
-    end)
-    b7.MouseButton1Click:Connect(function() notify("Executor","Executor placeholder (not included).",3) end)
-    b8.MouseButton1Click:Connect(function() notify("Credits","Created by YOUNG - Verbose Edition",4) end)
-
-    -- close behavior
-    closeBtn.MouseButton1Click:Connect(function()
-        Tween(window, 0.34, {Position = UDim2.new(0.5, -340, 1.6, 0)})
-        task.delay(0.34, function() gui:Destroy() end)
-    end)
-
-    -- minimize behavior
-    local minimized = false
-    minBtn.MouseButton1Click:Connect(function()
-        minimized = not minimized
-        if minimized then
-            Tween(window, 0.26, {Size = UDim2.new(0,680,0,96)})
-        else
-            Tween(window, 0.26, {Size = UDim2.new(0,680,0,480)})
         end
     end)
-
-    -- slide in animation
-    Tween(window, 0.6, {Position = UDim2.new(0.5, -340, 0.5, 0) }, Enum.EasingStyle.Quint)
-
-    return gui
-end
-
--- =====================================================================
--- SECTION 5: STARTUP - Wait until loading GUI is gone, then spawn main GUI
--- =====================================================================
--- We'll poll for the loading GUI removal (this is verbose but reliable)
-spawn(function()
-    -- wait until the loading GUI previously created is removed
-    while true do
-        local found = player.PlayerGui:FindFirstChild("KH_Loading_Verbose")
-        if not found then break end
-        task.wait(0.2)
-    end
-    -- now create main GUI
-    createMainGui()
 end)
 
--- =====================================================================
--- END OF FILE - Verbose Edition
--- This file is intentionally expanded and includes many explicit steps and repeated code
--- so you can see each GUI element and action individually.
--- If you want a trimmed/optimized version, use the compact script provided separately.
--- =====================================================================
+-- Teleport to Private
+makeBtn("Teleport to Private", function()
+    notify("Private Server","Paste your private server link into chat!",6)
+    -- you'd hook up chat detection here
+end)
+
+-- Server Hop
+makeBtn("Server Hop", function()
+    notify("Server Hop","Jumping servers...",3)
+    TeleportService:Teleport(game.PlaceId, player)
+end)
+
+-- Credits
+makeBtn("Credits", function()
+    notify("Credits","Made by YOUNG | Mobile polish by YOUNG",5)
+end)
