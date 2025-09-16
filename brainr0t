@@ -1,7 +1,6 @@
--- YHub Premium v12 - Full Working Edition
+-- YHub Premium v12 - Full Working Edition with Real Loader
 -- Credits: YOUNG
 
--- SERVICES
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -35,7 +34,7 @@ local function equipTaser()
     end
 end
 
--- AURA
+-- AUTO-TASE VISUALS
 local function createAura()
     if auraPart then auraPart:Destroy() end
     local part = Instance.new("Part")
@@ -61,7 +60,6 @@ local function createAura()
     end)
 end
 
--- FOV CIRCLE
 local function createFOVCircle()
     if fovCircle then fovCircle:Destroy() end
     local part = Instance.new("Part")
@@ -116,7 +114,7 @@ task.spawn(function()
     end
 end)
 
--- SCREEN GUI
+-- GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset = true
 
@@ -136,7 +134,6 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 26
 title.TextColor3 = Color3.fromRGB(255,255,255)
 
--- TOGGLE BUTTON
 local toggleBtn = Instance.new("TextButton", hub)
 toggleBtn.Size = UDim2.new(0.6,0,0.2,0)
 toggleBtn.Position = UDim2.new(0.2,0,0.5,0)
@@ -159,7 +156,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     clickSound:Play()
 end)
 
--- DRAG
+-- DRAG HUB
 local dragging, dragInput, dragStart, startPos
 local function update(input)
     local delta = input.Position - dragStart
@@ -186,7 +183,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ORB (Reopen Hub)
+-- ORB BUTTON
 local orb = Instance.new("TextButton", screenGui)
 orb.Size = UDim2.new(0,50,0,50)
 orb.Position = UDim2.new(0.05,0,0.8,0)
@@ -206,38 +203,41 @@ local function toggleHub()
     orb.Visible = true
 end
 
--- SIMPLE LOADER
+-- **NEW LOADER**
 local loader = Instance.new("Frame", screenGui)
 loader.Size = UDim2.new(1,0,1,0)
-loader.BackgroundColor3 = Color3.fromRGB(10,10,15)
+loader.BackgroundColor3 = Color3.fromRGB(15,15,20)
 
-local logo = Instance.new("TextLabel", loader)
-logo.AnchorPoint = Vector2.new(0.5,0.5)
-logo.Position = UDim2.new(0.5,0,0.3,0)
-logo.Size = UDim2.new(0.8,0,0.1,0)
-logo.BackgroundTransparency = 1
-logo.Font = Enum.Font.GothamBold
-logo.TextSize = 42
-logo.TextColor3 = Color3.fromRGB(255,255,255)
-logo.Text = "⚡ YHub Premium"
+-- Progress bar background
+local progressBG = Instance.new("Frame", loader)
+progressBG.Size = UDim2.new(0.6,0,0.03,0)
+progressBG.Position = UDim2.new(0.2,0,0.8,0)
+progressBG.BackgroundColor3 = Color3.fromRGB(40,40,60)
+Instance.new("UICorner", progressBG).CornerRadius = UDim.new(0,10)
 
-local subtitle = Instance.new("TextLabel", loader)
-subtitle.AnchorPoint = Vector2.new(0.5,0.5)
-subtitle.Position = UDim2.new(0.5,0,0.4,0)
-subtitle.Size = UDim2.new(0.8,0,0.05,0)
-subtitle.BackgroundTransparency = 1
-subtitle.Font = Enum.Font.GothamItalic
-subtitle.TextSize = 22
-subtitle.TextColor3 = Color3.fromRGB(160,160,200)
-subtitle.Text = "Initializing..."
+-- Progress fill
+local progressFill = Instance.new("Frame", progressBG)
+progressFill.Size = UDim2.new(0,0,1,0)
+progressFill.BackgroundColor3 = Color3.fromRGB(90,200,255)
+Instance.new("UICorner", progressFill).CornerRadius = UDim.new(0,10)
 
--- FAKE LOADER
+-- Loader text
+local loadText = Instance.new("TextLabel", loader)
+loadText.Size = UDim2.new(1,0,0.1,0)
+loadText.Position = UDim2.new(0,0,0.7,0)
+loadText.BackgroundTransparency = 1
+loadText.Font = Enum.Font.GothamBold
+loadText.TextSize = 28
+loadText.TextColor3 = Color3.fromRGB(255,255,255)
+loadText.Text = "Loading YHub Premium..."
+
+-- Animate loader
 task.spawn(function()
-    local steps = {"Loading modules","Checking environment","Fetching user data","Validating premium access","Almost done"}
-    for i,step in ipairs(steps) do
-        subtitle.Text = step.."..."
-        task.wait(0.5)
+    for i=0,1,0.01 do
+        progressFill.Size = UDim2.new(i,0,1,0)
+        task.wait(0.03)
     end
+    task.wait(0.3)
     loader:Destroy()
     toggleHub()
 end)
