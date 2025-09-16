@@ -1,19 +1,16 @@
---// YHub Premium v13 - Aesthetic Update
---// Credits: YOUNG
+--// YHub Premium v14 - Aesthetic GUI
+--// This version focuses on a clean, premium user interface.
 
 --// Services
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 --// CONFIG
-local TASER_NAME = "Taser Gun"
-local AUTO_TASE_RADIUS = 14
+local HUB_WIDTH, HUB_HEIGHT = 400, 250
 local autoTaseEnabled = false
-local auraPart, fovCircle
 
 --// SOUNDS
 local hoverSound = Instance.new("Sound", PlayerGui)
@@ -23,117 +20,11 @@ local clickSound = Instance.new("Sound", PlayerGui)
 clickSound.SoundId = "rbxassetid://9118831569"
 clickSound.Volume = 0.4
 
---// UTILITY
-local function equipTaser()
-    local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
-    if tool then
-        local backpack = LocalPlayer:WaitForChild("Backpack")
-        if not backpack:FindFirstChild(TASER_NAME) then
-            tool:Clone().Parent = backpack
-        end
-    end
-end
-
---// AUTO-TASE VISUALS
-local function createAura()
-    if auraPart then auraPart:Destroy() end
-    local part = Instance.new("Part")
-    part.Size = Vector3.new(AUTO_TASE_RADIUS*2, AUTO_TASE_RADIUS*2, AUTO_TASE_RADIUS*2)
-    part.Anchored = true
-    part.CanCollide = false
-    part.Material = Enum.Material.Neon
-    part.Shape = Enum.PartType.Ball
-    part.Transparency = 0.6
-    part.Parent = workspace
-    auraPart = part
-    task.spawn(function()
-        local t = 0
-        while auraPart and auraPart.Parent do
-            t += 0.01
-            auraPart.Color = Color3.fromHSV(t%1,0.95,0.95)
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                auraPart.CFrame = char.HumanoidRootPart.CFrame
-            end
-            RunService.RenderStepped:Wait()
-        end
-    end)
-end
-
-local function createFOVCircle()
-    if fovCircle then fovCircle:Destroy() end
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.CanCollide = false
-    part.Size = Vector3.new(AUTO_TASE_RADIUS*2,0.2,AUTO_TASE_RADIUS*2)
-    part.Material = Enum.Material.Neon
-    part.Transparency = 0.5
-    part.Shape = Enum.PartType.Cylinder
-    part.Parent = workspace
-    fovCircle = part
-    task.spawn(function()
-        local t = 0
-        while fovCircle and fovCircle.Parent do
-            t += 0.01
-            fovCircle.Color = Color3.fromHSV(t%1,0.95,0.95)
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                fovCircle.CFrame = CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,0.3,0)) * CFrame.Angles(math.rad(90),0,0)
-            end
-            RunService.RenderStepped:Wait()
-        end
-    end)
-end
-
---// AUTO-TASE LOOP
-task.spawn(function()
-    while true do
-        RunService.RenderStepped:Wait()
-        if autoTaseEnabled then
-            local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if not auraPart then createAura() end
-                if not fovCircle then createFOVCircle() end
-                local taser = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or (char and char:FindFirstChild(TASER_NAME))
-                if taser then
-                    for _,pl in ipairs(Players:GetPlayers()) do
-                        if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
-                            local otherHRP = pl.Character.HumanoidRootPart
-                            if (hrp.Position - otherHRP.Position).Magnitude <= AUTO_TASE_RADIUS then
-                                taser:Activate()
-                            end
-                        end
-                    end
-                end
-            end
-        else
-            if auraPart then auraPart:Destroy(); auraPart=nil end
-            if fovCircle then fovCircle:Destroy(); fovCircle=nil end
-        end
-    end
-end)
-
 --// GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset = true
 
----
-## **Aesthetic Improvements**
-The GUI is now more sophisticated with a subtle blur background, an animated title, and a modern color scheme. Instead of a single button, it uses a toggle switch to make it more interactive and visually appealing.
-
----
-
-### **New Design Details**
-
-* **Main Frame:** A `UIStroke` and `UIGradient` are added to give the frame a clean, glowing edge and a sleek, modern background.
-* **Toggle Switch:** The old text button is replaced with a more modern toggle switch, which is more intuitive and visually engaging.
-* **Orb Button:** The orb now has a subtle `UIStroke` to make it stand out better.
-* **Loader:** The loader is updated to include a pulsing light effect, a gradient progress bar, and a title that fades in, creating a more professional and polished loading experience.
-
-```lua
 --// HUB FRAME
-local HUB_WIDTH, HUB_HEIGHT = 400, 250
 local hub = Instance.new("Frame", screenGui)
 hub.Size = UDim2.new(0, HUB_WIDTH, 0, HUB_HEIGHT)
 hub.Position = UDim2.new(0.5, -HUB_WIDTH/2, 0.5, -HUB_HEIGHT/2)
@@ -179,7 +70,7 @@ subtitle.Name = "Subtitle"
 subtitle.Size = UDim2.new(1, 0, 0, 20)
 subtitle.Position = UDim2.new(0, 0, 0, 50)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Premium v13"
+subtitle.Text = "Premium v14"
 subtitle.Font = Enum.Font.GothamBold
 subtitle.TextSize = 16
 subtitle.TextColor3 = Color3.fromRGB(150, 150, 170)
@@ -204,7 +95,7 @@ toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
 local toggle = Instance.new("TextButton", toggleFrame)
 toggle.Size = UDim2.new(0, 40, 0, 30)
 toggle.Position = UDim2.new(1, -45, 0.5, -15)
-toggle.BackgroundColor3 = Color3.fromRGB(90, 200, 255)
+toggle.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
 toggle.Text = ""
 toggle.AutoButtonColor = false
 Instance.new("UICorner", toggle).CornerRadius = UDim.new(1, 0)
@@ -339,6 +230,3 @@ task.spawn(function()
     loader:Destroy()
     toggleHub()
 end)
-
--- START
-equipTaser()
