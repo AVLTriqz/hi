@@ -1,7 +1,7 @@
---// YHub Premium v12 - Full Edition
---// Credits: YOUNG (creator)
+-- YHub Premium v12 - Full Working Edition
+-- Credits: YOUNG
 
---// Services
+-- SERVICES
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -9,24 +9,22 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
---// CONFIG
+-- CONFIG
 local TASER_NAME = "Taser Gun"
 local AUTO_TASE_RADIUS = 14
-local HUB_WIDTH = 300
-local HUB_HEIGHT = 160
+local HUB_WIDTH, HUB_HEIGHT = 300, 160
 local autoTaseEnabled = false
 local auraPart, fovCircle
 
---// SOUNDS
+-- SOUNDS
 local hoverSound = Instance.new("Sound", PlayerGui)
 hoverSound.SoundId = "rbxassetid://9118825481"
 hoverSound.Volume = 0.3
-
 local clickSound = Instance.new("Sound", PlayerGui)
 clickSound.SoundId = "rbxassetid://9118831569"
 clickSound.Volume = 0.4
 
---// Utility
+-- EQUIP TASER
 local function equipTaser()
     local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
     if tool then
@@ -37,7 +35,7 @@ local function equipTaser()
     end
 end
 
---// Aura
+-- AURA
 local function createAura()
     if auraPart then auraPart:Destroy() end
     local part = Instance.new("Part")
@@ -63,7 +61,7 @@ local function createAura()
     end)
 end
 
---// Rainbow FOV circle
+-- FOV CIRCLE
 local function createFOVCircle()
     if fovCircle then fovCircle:Destroy() end
     local part = Instance.new("Part")
@@ -74,7 +72,6 @@ local function createFOVCircle()
     part.Transparency = 0.5
     part.Shape = Enum.PartType.Cylinder
     part.Parent = workspace
-    part.CFrame = CFrame.new(Vector3.new(0,0,0)) * CFrame.Angles(math.rad(90),0,0)
     fovCircle = part
     task.spawn(function()
         local t = 0
@@ -90,42 +87,40 @@ local function createFOVCircle()
     end)
 end
 
---// Auto-tase loop
-local function autoTaseLoop()
-    task.spawn(function()
-        while true do
-            RunService.RenderStepped:Wait()
-            if autoTaseEnabled then
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    if not auraPart then createAura() end
-                    if not fovCircle then createFOVCircle() end
-                    local taser = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or (char and char:FindFirstChild(TASER_NAME))
-                    if taser then
-                        for _,pl in ipairs(Players:GetPlayers()) do
-                            if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
-                                local otherHRP = pl.Character.HumanoidRootPart
-                                if (hrp.Position - otherHRP.Position).Magnitude <= AUTO_TASE_RADIUS then
-                                    taser:Activate()
-                                end
+-- AUTO-TASE LOOP
+task.spawn(function()
+    while true do
+        RunService.RenderStepped:Wait()
+        if autoTaseEnabled then
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                if not auraPart then createAura() end
+                if not fovCircle then createFOVCircle() end
+                local taser = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or (char and char:FindFirstChild(TASER_NAME))
+                if taser then
+                    for _,pl in ipairs(Players:GetPlayers()) do
+                        if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+                            local otherHRP = pl.Character.HumanoidRootPart
+                            if (hrp.Position - otherHRP.Position).Magnitude <= AUTO_TASE_RADIUS then
+                                taser:Activate()
                             end
                         end
                     end
                 end
-            else
-                if auraPart then auraPart:Destroy(); auraPart=nil end
-                if fovCircle then fovCircle:Destroy(); fovCircle=nil end
             end
+        else
+            if auraPart then auraPart:Destroy(); auraPart=nil end
+            if fovCircle then fovCircle:Destroy(); fovCircle=nil end
         end
-    end)
-end
+    end
+end)
 
---// GUI SETUP
+-- SCREEN GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset = true
 
---// Hub Frame
+-- HUB
 local hub = Instance.new("Frame", screenGui)
 hub.Size = UDim2.new(0,HUB_WIDTH,0,HUB_HEIGHT)
 hub.Position = UDim2.new(0.5,-HUB_WIDTH/2,0.4,-HUB_HEIGHT/2)
@@ -141,6 +136,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 26
 title.TextColor3 = Color3.fromRGB(255,255,255)
 
+-- TOGGLE BUTTON
 local toggleBtn = Instance.new("TextButton", hub)
 toggleBtn.Size = UDim2.new(0.6,0,0.2,0)
 toggleBtn.Position = UDim2.new(0.2,0,0.5,0)
@@ -163,7 +159,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     clickSound:Play()
 end)
 
---// Dragging
+-- DRAG
 local dragging, dragInput, dragStart, startPos
 local function update(input)
     local delta = input.Position - dragStart
@@ -190,7 +186,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ORB (toggle button to reopen hub)
+-- ORB (Reopen Hub)
 local orb = Instance.new("TextButton", screenGui)
 orb.Size = UDim2.new(0,50,0,50)
 orb.Position = UDim2.new(0.05,0,0.8,0)
@@ -201,18 +197,16 @@ orb.BackgroundColor3 = Color3.fromRGB(40,40,60)
 orb.TextColor3 = Color3.fromRGB(255,255,255)
 orb.Visible = false
 Instance.new("UICorner", orb).CornerRadius = UDim.new(1,0)
-
 orb.MouseButton1Click:Connect(function()
     hub.Visible = not hub.Visible
 end)
 
---// TOGGLE FUNCTION
-function toggleHub()
+local function toggleHub()
     hub.Visible = true
     orb.Visible = true
 end
 
---// LOADER (KRNL-style with Key)
+-- SIMPLE LOADER
 local loader = Instance.new("Frame", screenGui)
 loader.Size = UDim2.new(1,0,1,0)
 loader.BackgroundColor3 = Color3.fromRGB(10,10,15)
@@ -237,101 +231,16 @@ subtitle.TextSize = 22
 subtitle.TextColor3 = Color3.fromRGB(160,160,200)
 subtitle.Text = "Initializing..."
 
-local progressBG = Instance.new("Frame", loader)
-progressBG.AnchorPoint = Vector2.new(0.5,0.5)
-progressBG.Position = UDim2.new(0.5,0,0.48,0)
-progressBG.Size = UDim2.new(0.6,0,0.02,0)
-progressBG.BackgroundColor3 = Color3.fromRGB(40,40,60)
-progressBG.BorderSizePixel = 0
-Instance.new("UICorner", progressBG).CornerRadius = UDim.new(0,8)
-
-local progressFill = Instance.new("Frame", progressBG)
-progressFill.Size = UDim2.new(0,0,1,0)
-progressFill.BackgroundColor3 = Color3.fromRGB(90,200,255)
-progressFill.BorderSizePixel = 0
-Instance.new("UICorner", progressFill).CornerRadius = UDim.new(0,8)
-
--- Fake Loading
+-- FAKE LOADER
 task.spawn(function()
-    local steps = {"Loading modules","Checking environment","Fetching user data","Validating premium access","Checking key","Bypassing security","Almost done"}
+    local steps = {"Loading modules","Checking environment","Fetching user data","Validating premium access","Almost done"}
     for i,step in ipairs(steps) do
         subtitle.Text = step.."..."
-        for j=1,20 do
-            progressFill.Size = UDim2.new(((i-1)*20+j)/(#steps*20),0,1,0)
-            task.wait(0.03)
-        end
+        task.wait(0.5)
     end
-    subtitle.Text = "Checking key system..."
-    progressBG.Visible = false
-    task.wait(1)
-
-    local keyFrame = Instance.new("Frame", loader)
-    keyFrame.AnchorPoint = Vector2.new(0.5,0.5)
-    keyFrame.Position = UDim2.new(0.5,0,0.65,0)
-    keyFrame.Size = UDim2.new(0.45,0,0.2,0)
-    keyFrame.BackgroundColor3 = Color3.fromRGB(25,25,40)
-    keyFrame.BorderSizePixel = 0
-    keyFrame.Parent = loader
-    Instance.new("UICorner", keyFrame).CornerRadius = UDim.new(0,12)
-    Instance.new("UIStroke", keyFrame).Color = Color3.fromRGB(90,200,255)
-
-    local keyBox = Instance.new("TextBox", keyFrame)
-    keyBox.AnchorPoint = Vector2.new(0.5,0)
-    keyBox.Position = UDim2.new(0.5,0,0.1,0)
-    keyBox.Size = UDim2.new(0.9,0,0.3,0)
-    keyBox.BackgroundColor3 = Color3.fromRGB(15,15,25)
-    keyBox.Text = ""
-    keyBox.PlaceholderText = "Enter your YHub key here"
-    keyBox.TextColor3 = Color3.fromRGB(255,255,255)
-    keyBox.Font = Enum.Font.Gotham
-    keyBox.TextSize = 18
-    keyBox.Parent = keyFrame
-    Instance.new("UICorner", keyBox).CornerRadius = UDim.new(0,8)
-
-    local getKey = Instance.new("TextButton", keyFrame)
-    getKey.AnchorPoint = Vector2.new(0.5,0)
-    getKey.Position = UDim2.new(0.25,0,0.55,0)
-    getKey.Size = UDim2.new(0.4,0,0.3,0)
-    getKey.BackgroundColor3 = Color3.fromRGB(70,70,90)
-    getKey.Text = "Get Key"
-    getKey.TextColor3 = Color3.fromRGB(255,255,255)
-    getKey.Font = Enum.Font.GothamBold
-    getKey.TextSize = 18
-    getKey.Parent = keyFrame
-    Instance.new("UICorner", getKey).CornerRadius = UDim.new(0,8)
-
-    local verify = Instance.new("TextButton", keyFrame)
-    verify.AnchorPoint = Vector2.new(0.5,0)
-    verify.Position = UDim2.new(0.75,0,0.55,0)
-    verify.Size = UDim2.new(0.4,0,0.3,0)
-    verify.BackgroundColor3 = Color3.fromRGB(90,200,255)
-    verify.Text = "Verify"
-    verify.TextColor3 = Color3.fromRGB(10,10,20)
-    verify.Font = Enum.Font.GothamBold
-    verify.TextSize = 18
-    verify.Parent = keyFrame
-    Instance.new("UICorner", verify).CornerRadius = UDim.new(0,8)
-
-    verify.MouseButton1Click:Connect(function()
-        subtitle.Text = "Verifying key..."
-        verify.Text = "Checking..."
-        task.wait(2)
-        subtitle.Text = "Access Granted ✅"
-        verify.Text = "Success!"
-        task.wait(1)
-        loader:Destroy()
-        hub.Visible = true
-        orb.Visible = true
-        toggleHub()
-    end)
-
-    getKey.MouseButton1Click:Connect(function()
-        subtitle.Text = "Redirecting to key system..."
-        task.wait(1.5)
-        subtitle.Text = "Error: Please try again later."
-    end)
+    loader:Destroy()
+    toggleHub()
 end)
 
---// Start
+-- START
 equipTaser()
-autoTaseLoop()
