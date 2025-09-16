@@ -1,6 +1,9 @@
--- YHub Premium Mobile v13 (Enhanced GUI & Features)
--- StarterPlayerScripts LocalScript
+--=============================================================
+-- ⚡ YHub Premium v14 (Ultra Enhanced Edition)
+-- Script Created by: YOUNG
+--=============================================================
 
+-- // Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -9,14 +12,14 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- CONFIG
+-- // CONFIG
 local TASER_NAME = "Taser Gun"
 local AUTO_TASE_RADIUS = 14
-local HUB_WIDTH, HUB_HEIGHT = 320, 180
+local HUB_WIDTH, HUB_HEIGHT = 340, 200
 local autoTaseEnabled = false
 local auraPart, fovCircle
 
--- ===== Sounds =====
+-- // Sounds
 local function createSound(id, vol)
     local s = Instance.new("Sound", PlayerGui)
     s.SoundId = "rbxassetid://" .. id
@@ -24,12 +27,11 @@ local function createSound(id, vol)
     return s
 end
 
-local hoverSound = createSound("9118825481", 0.3)
 local clickSound = createSound("9118831569", 0.5)
 local openSound = createSound("12221967", 0.5)
 local notifSound = createSound("9119136260", 0.4)
 
--- ===== Utility =====
+-- // Utility
 local function equipTaser()
     local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
     if tool then
@@ -110,9 +112,16 @@ local function autoTaseLoop()
     end)
 end
 
--- ===== GUI =====
+-- // GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset, screenGui.ResetOnSpawn = true, false
+
+-- Watermark
+local watermark = Instance.new("TextLabel", screenGui)
+watermark.Size, watermark.Position = UDim2.new(0,200,0,20), UDim2.new(1,-210,1,-30)
+watermark.BackgroundTransparency = 1
+watermark.Text, watermark.Font, watermark.TextSize = "⚡ YHub Premium | by YOUNG", Enum.Font.GothamItalic, 14
+watermark.TextColor3 = Color3.fromRGB(150,150,255)
 
 -- Movable Toggle Button
 local toggleButton = Instance.new("TextButton", screenGui)
@@ -163,6 +172,13 @@ autoBtn.MouseButton1Click:Connect(function()
     clickSound:Play()
 end)
 
+-- Credits label
+local credits = Instance.new("TextLabel", hub)
+credits.Size, credits.Position = UDim2.new(1,0,0,20), UDim2.new(0,0,1,-22)
+credits.BackgroundTransparency = 1
+credits.Text, credits.Font, credits.TextSize = "Made with ⚡ by YOUNG", Enum.Font.GothamItalic, 14
+credits.TextColor3 = Color3.fromRGB(200,200,200)
+
 -- Open/Close Animation
 local hubOpen = false
 local function toggleHub()
@@ -179,19 +195,28 @@ local function toggleHub()
 end
 toggleButton.MouseButton1Click:Connect(toggleHub)
 
--- Fancy Notifications
+-- Notifications
 local function notify(msg)
     notifSound:Play()
     local n = Instance.new("TextLabel", screenGui)
-    n.Size, n.Position = UDim2.new(0,220,0,40), UDim2.new(0.5,-110,0.9,0)
+    n.Size, n.Position = UDim2.new(0,240,0,40), UDim2.new(0.5,-120,0.9,0)
     n.BackgroundColor3, n.TextColor3 = Color3.fromRGB(30,30,45), Color3.fromRGB(255,255,255)
     n.Font, n.TextSize, n.Text = Enum.Font.GothamBold, 18, msg
     Instance.new("UICorner", n).CornerRadius = UDim.new(0,10)
-    TweenService:Create(n,TweenInfo.new(0.3),{Position=UDim2.new(0.5,-110,0.8,0)}):Play()
-    task.delay(3,function() TweenService:Create(n,TweenInfo.new(0.3),{Position=UDim2.new(0.5,-110,1.2,0)}):Play(); task.wait(0.3); n:Destroy() end)
+    TweenService:Create(n,TweenInfo.new(0.3),{Position=UDim2.new(0.5,-120,0.8,0)}):Play()
+    task.delay(3,function() TweenService:Create(n,TweenInfo.new(0.3),{Position=UDim2.new(0.5,-120,1.2,0)}):Play(); task.wait(0.3); n:Destroy() end)
 end
+
+-- Loading Screen
+local loading = Instance.new("TextLabel", screenGui)
+loading.Size, loading.Position = UDim2.new(1,0,1,0), UDim2.new(0,0,0,0)
+loading.BackgroundColor3 = Color3.fromRGB(15,15,25)
+loading.Text, loading.Font, loading.TextSize = "⚡ Loading YHub Premium...", Enum.Font.GothamItalic, 28
+loading.TextColor3 = Color3.fromRGB(255,255,255)
+TweenService:Create(loading,TweenInfo.new(2),{TextTransparency=1}):Play()
+task.delay(2.2,function() loading:Destroy() end)
 
 -- Start
 equipTaser()
 autoTaseLoop()
-notify("✅ YHub Premium Loaded!")
+notify("✅ YHub Premium Loaded! | Script by YOUNG")
