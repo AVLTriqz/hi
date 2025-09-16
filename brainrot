@@ -1,0 +1,281 @@
+-- YHub Premium v15 - Ultra-Premium Edition
+-- Credits: YOUNG
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- CONFIG
+local HUB_WIDTH, HUB_HEIGHT = 420, 280
+local autoTaseEnabled = false
+local TASER_NAME = "Taser Gun"
+local AUTO_TASE_RADIUS = 14
+local auraPart, fovCircle
+
+-- Sounds
+local hoverSound = Instance.new("Sound", PlayerGui)
+hoverSound.SoundId = "rbxassetid://9118825481"
+hoverSound.Volume = 0.3
+local clickSound = Instance.new("Sound", PlayerGui)
+clickSound.SoundId = "rbxassetid://9118831569"
+clickSound.Volume = 0.4
+
+-- Screen GUI
+local screenGui = Instance.new("ScreenGui", PlayerGui)
+screenGui.IgnoreGuiInset = true
+
+-- LOADER
+local loader = Instance.new("Frame", screenGui)
+loader.Size = UDim2.new(1, 0, 1, 0)
+loader.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
+
+-- Animated logo
+local logo = Instance.new("TextLabel", loader)
+logo.Size = UDim2.new(0.5, 0, 0.1, 0)
+logo.Position = UDim2.new(0.25, 0, 0.35, 0)
+logo.BackgroundTransparency = 1
+logo.Font = Enum.Font.GothamBold
+logo.TextSize = 48
+logo.TextColor3 = Color3.fromRGB(255, 255, 255)
+logo.Text = "YHub"
+local logoGrad = Instance.new("UIGradient", logo)
+logoGrad.Color = ColorSequence.new(Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 255, 255))
+logoGrad.Rotation = 90
+logo.TextTransparency = 1
+
+-- Progress bar
+local progressBG = Instance.new("Frame", loader)
+progressBG.Size = UDim2.new(0.6, 0, 0.04, 0)
+progressBG.Position = UDim2.new(0.2, 0, 0.6, 0)
+progressBG.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+Instance.new("UICorner", progressBG).CornerRadius = UDim.new(0, 12)
+
+local progressFill = Instance.new("Frame", progressBG)
+progressFill.Size = UDim2.new(0, 0, 1, 0)
+progressFill.BackgroundColor3 = Color3.fromRGB(90, 200, 255)
+Instance.new("UICorner", progressFill).CornerRadius = UDim.new(0, 12)
+
+-- Loader animation
+task.spawn(function()
+    TweenService:Create(logo, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    task.wait(0.6)
+    for i = 0, 1, 0.01 do
+        progressFill.Size = UDim2.new(i, 0, 1, 0)
+        task.wait(0.01)
+    end
+    task.wait(0.3)
+    TweenService:Create(loader, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    loader:Destroy()
+end)
+
+-- HUB FRAME
+local hub = Instance.new("Frame", screenGui)
+hub.Size = UDim2.new(0, HUB_WIDTH, 0, HUB_HEIGHT)
+hub.Position = UDim2.new(0.5, -HUB_WIDTH/2, 0.5, -HUB_HEIGHT/2)
+hub.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+hub.BorderSizePixel = 0
+hub.Visible = false
+Instance.new("UICorner", hub).CornerRadius = UDim.new(0, 18)
+local hubStroke = Instance.new("UIStroke", hub)
+hubStroke.Color = Color3.fromRGB(90, 200, 255)
+hubStroke.Thickness = 2
+hubStroke.Transparency = 0.5
+
+-- UI Gradient
+local bgGradient = Instance.new("UIGradient", hub)
+bgGradient.Color = ColorSequence.new(Color3.fromRGB(20, 20, 30), Color3.fromRGB(30, 30, 40))
+bgGradient.Rotation = 90
+
+-- TITLE
+local title = Instance.new("TextLabel", hub)
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Position = UDim2.new(0, 0, 0, 10)
+title.BackgroundTransparency = 1
+title.Text = "YHub"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 40
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+local titleGradient = Instance.new("UIGradient", title)
+titleGradient.Color = ColorSequence.new(Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 255, 255))
+titleGradient.Rotation = 90
+
+-- Subtitle / credits
+local subtitle = Instance.new("TextLabel", hub)
+subtitle.Size = UDim2.new(1, 0, 0, 20)
+subtitle.Position = UDim2.new(0, 0, 0, 55)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "Premium v15 - Script by YOUNG"
+subtitle.Font = Enum.Font.GothamItalic
+subtitle.TextSize = 16
+subtitle.TextColor3 = Color3.fromRGB(180, 180, 220)
+
+-- TOGGLE BUTTON
+local toggleFrame = Instance.new("Frame", hub)
+toggleFrame.Size = UDim2.new(0.6, 0, 0, 40)
+toggleFrame.Position = UDim2.new(0.2, 0, 0.5, 0)
+toggleFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+Instance.new("UICorner", toggleFrame).CornerRadius = UDim.new(1,0)
+
+local toggleLabel = Instance.new("TextLabel", toggleFrame)
+toggleLabel.Size = UDim2.new(1, -50, 1, 0)
+toggleLabel.Position = UDim2.new(0,0,0,0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.Text = "AUTO-TASE"
+toggleLabel.Font = Enum.Font.GothamBold
+toggleLabel.TextSize = 18
+toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local toggle = Instance.new("TextButton", toggleFrame)
+toggle.Size = UDim2.new(0, 40, 0, 30)
+toggle.Position = UDim2.new(1, -45, 0.5, -15)
+toggle.BackgroundColor3 = Color3.fromRGB(70,70,90)
+toggle.Text = ""
+toggle.AutoButtonColor = false
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(1,0)
+
+local indicator = Instance.new("Frame", toggle)
+indicator.Size = UDim2.new(0,24,0,24)
+indicator.Position = UDim2.new(0,3,0.5,-12)
+indicator.BackgroundColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", indicator).CornerRadius = UDim.new(1,0)
+
+-- UPDATE TOGGLE FUNCTION
+local function updateToggle()
+    if autoTaseEnabled then
+        TweenService:Create(indicator, TweenInfo.new(0.2), {Position=UDim2.new(1,-27,0.5,-12)}):Play()
+        TweenService:Create(toggle, TweenInfo.new(0.2), {BackgroundColor3=Color3.fromRGB(90,200,255)}):Play()
+    else
+        TweenService:Create(indicator, TweenInfo.new(0.2), {Position=UDim2.new(0,3,0.5,-12)}):Play()
+        TweenService:Create(toggle, TweenInfo.new(0.2), {BackgroundColor3=Color3.fromRGB(70,70,90)}):Play()
+    end
+end
+
+toggle.MouseButton1Click:Connect(function()
+    autoTaseEnabled = not autoTaseEnabled
+    clickSound:Play()
+    updateToggle()
+    -- Equip Taser
+    local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
+    if tool and not LocalPlayer.Backpack:FindFirstChild(TASER_NAME) then
+        tool:Clone().Parent = LocalPlayer.Backpack
+    end
+end)
+
+-- DRAGGING
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    hub.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
+end
+hub.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging=true
+        dragStart=input.Position
+        startPos=hub.Position
+        input.Changed:Connect(function()
+            if input.UserInputState==Enum.UserInputState.End then dragging=false end
+        end)
+    end
+end)
+hub.InputChanged:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.MouseMovement then
+        dragInput=input
+    end
+end)
+RunService.RenderStepped:Connect(function()
+    if dragging and dragInput then update(dragInput) end
+end)
+
+-- ORB BUTTON
+local orb = Instance.new("TextButton", screenGui)
+orb.Size = UDim2.new(0,50,0,50)
+orb.Position = UDim2.new(0.05,0,0.8,0)
+orb.Text="☰"
+orb.Font = Enum.Font.GothamBold
+orb.TextSize = 22
+orb.BackgroundColor3 = Color3.fromRGB(40,40,60)
+orb.TextColor3 = Color3.fromRGB(255,255,255)
+orb.Visible=false
+Instance.new("UICorner", orb).CornerRadius=UDim.new(1,0)
+local orbStroke = Instance.new("UIStroke", orb)
+orbStroke.Color = Color3.fromRGB(90,200,255)
+orbStroke.Thickness=1
+orbStroke.Transparency=0.5
+
+orb.MouseEnter:Connect(function()
+    TweenService:Create(orb,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(60,60,80)}):Play()
+    hoverSound:Play()
+end)
+orb.MouseLeave:Connect(function()
+    TweenService:Create(orb,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(40,40,60)}):Play()
+end)
+orb.MouseButton1Click:Connect(function()
+    hub.Visible = not hub.Visible
+    clickSound:Play()
+end)
+
+local function toggleHub()
+    hub.Visible=true
+    orb.Visible=true
+    updateToggle()
+end
+
+-- TASER AUTO-TASE LOGIC
+local auraPart, fovCircle
+task.spawn(function()
+    while true do
+        RunService.RenderStepped:Wait()
+        if autoTaseEnabled then
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Create aura
+                if not auraPart then
+                    auraPart = Instance.new("Part", workspace)
+                    auraPart.Size=Vector3.new(AUTO_TASE_RADIUS*2,AUTO_TASE_RADIUS*2,AUTO_TASE_RADIUS*2)
+                    auraPart.Anchored=true
+                    auraPart.CanCollide=false
+                    auraPart.Material=Enum.Material.Neon
+                    auraPart.Shape=Enum.PartType.Ball
+                    auraPart.Transparency=0.6
+                end
+                auraPart.CFrame = hrp.CFrame
+
+                -- Create FOV circle
+                if not fovCircle then
+                    fovCircle = Instance.new("Part", workspace)
+                    fovCircle.Size=Vector3.new(AUTO_TASE_RADIUS*2,0.2,AUTO_TASE_RADIUS*2)
+                    fovCircle.Anchored=true
+                    fovCircle.CanCollide=false
+                    fovCircle.Material=Enum.Material.Neon
+                    fovCircle.Transparency=0.5
+                    fovCircle.Shape=Enum.PartType.Cylinder
+                end
+                fovCircle.CFrame = CFrame.new(hrp.Position + Vector3.new(0,0.3,0)) * CFrame.Angles(math.rad(90),0,0)
+
+                -- Equip and tase
+                local tool = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or char:FindFirstChild(TASER_NAME)
+                if not tool then
+                    local t = ReplicatedStorage:FindFirstChild(TASER_NAME)
+                    if t then t:Clone().Parent = LocalPlayer.Backpack end
+                else
+                    for _,pl in ipairs(Players:GetPlayers()) do
+                        if pl~=LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+                            if (hrp.Position - pl.Character.HumanoidRootPart.Position).Magnitude <= AUTO_TASE_RADIUS then
+                                tool:Activate()
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            if auraPart then auraPart:Destroy(); auraPart=nil end
+            if fovCircle then fovCircle:Destroy(); fovCircle=nil end
+        end
+    end
+end)
