@@ -1,6 +1,7 @@
--- YHub Premium v12 - Full Working Edition with Real Loader
--- Credits: YOUNG
+--// YHub Premium v13 - Aesthetic Update
+--// Credits: YOUNG
 
+--// Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -8,14 +9,13 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- CONFIG
+--// CONFIG
 local TASER_NAME = "Taser Gun"
 local AUTO_TASE_RADIUS = 14
-local HUB_WIDTH, HUB_HEIGHT = 300, 160
 local autoTaseEnabled = false
 local auraPart, fovCircle
 
--- SOUNDS
+--// SOUNDS
 local hoverSound = Instance.new("Sound", PlayerGui)
 hoverSound.SoundId = "rbxassetid://9118825481"
 hoverSound.Volume = 0.3
@@ -23,7 +23,7 @@ local clickSound = Instance.new("Sound", PlayerGui)
 clickSound.SoundId = "rbxassetid://9118831569"
 clickSound.Volume = 0.4
 
--- EQUIP TASER
+--// UTILITY
 local function equipTaser()
     local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
     if tool then
@@ -34,7 +34,7 @@ local function equipTaser()
     end
 end
 
--- AUTO-TASE VISUALS
+--// AUTO-TASE VISUALS
 local function createAura()
     if auraPart then auraPart:Destroy() end
     local part = Instance.new("Part")
@@ -85,7 +85,7 @@ local function createFOVCircle()
     end)
 end
 
--- AUTO-TASE LOOP
+--// AUTO-TASE LOOP
 task.spawn(function()
     while true do
         RunService.RenderStepped:Wait()
@@ -114,49 +114,124 @@ task.spawn(function()
     end
 end)
 
--- GUI
+--// GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset = true
 
--- HUB
+---
+## **Aesthetic Improvements**
+The GUI is now more sophisticated with a subtle blur background, an animated title, and a modern color scheme. Instead of a single button, it uses a toggle switch to make it more interactive and visually appealing.
+
+---
+
+### **New Design Details**
+
+* **Main Frame:** A `UIStroke` and `UIGradient` are added to give the frame a clean, glowing edge and a sleek, modern background.
+* **Toggle Switch:** The old text button is replaced with a more modern toggle switch, which is more intuitive and visually engaging.
+* **Orb Button:** The orb now has a subtle `UIStroke` to make it stand out better.
+* **Loader:** The loader is updated to include a pulsing light effect, a gradient progress bar, and a title that fades in, creating a more professional and polished loading experience.
+
+```lua
+--// HUB FRAME
+local HUB_WIDTH, HUB_HEIGHT = 400, 250
 local hub = Instance.new("Frame", screenGui)
-hub.Size = UDim2.new(0,HUB_WIDTH,0,HUB_HEIGHT)
-hub.Position = UDim2.new(0.5,-HUB_WIDTH/2,0.4,-HUB_HEIGHT/2)
-hub.BackgroundColor3 = Color3.fromRGB(28,28,38)
+hub.Size = UDim2.new(0, HUB_WIDTH, 0, HUB_HEIGHT)
+hub.Position = UDim2.new(0.5, -HUB_WIDTH/2, 0.5, -HUB_HEIGHT/2)
+hub.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+hub.BorderSizePixel = 0
 hub.Visible = false
-Instance.new("UICorner", hub).CornerRadius = UDim.new(0,20)
+Instance.new("UICorner", hub).CornerRadius = UDim.new(0, 15)
+Instance.new("UIStroke", hub).Color = Color3.fromRGB(90, 200, 255)
+Instance.new("UIStroke", hub).Thickness = 1
+Instance.new("UIStroke", hub).Transparency = 0.5
 
+-- UIGradient for the background
+local bgGradient = Instance.new("UIGradient", hub)
+bgGradient.Color = ColorSequence.new(Color3.fromRGB(20, 20, 30), Color3.fromRGB(25, 25, 35))
+bgGradient.Rotation = 90
+
+-- Blur effect behind the hub
+local blur = Instance.new("Frame", hub)
+blur.Size = UDim2.new(1,0,1,0)
+blur.BackgroundTransparency = 1
+blur.ZIndex = -1
+local blurEffect = Instance.new("BlurEffect", blur)
+blurEffect.Size = 15
+blurEffect.Parent = PlayerGui
+
+-- Title
 local title = Instance.new("TextLabel", hub)
-title.Size = UDim2.new(1,0,0,40)
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Position = UDim2.new(0, 0, 0, 10)
 title.BackgroundTransparency = 1
-title.Text = "YHub Premium"
+title.Text = "YHub"
 title.Font = Enum.Font.GothamBold
-title.TextSize = 26
-title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextSize = 38
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+local titleGradient = Instance.new("UIGradient", title)
+titleGradient.Color = ColorSequence.new(Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 255, 255))
+titleGradient.Rotation = 90
 
-local toggleBtn = Instance.new("TextButton", hub)
-toggleBtn.Size = UDim2.new(0.6,0,0.2,0)
-toggleBtn.Position = UDim2.new(0.2,0,0.5,0)
-toggleBtn.Text = "AUTO-TASE: OFF"
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 20
-toggleBtn.BackgroundColor3 = Color3.fromRGB(70,70,90)
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0,12)
+-- Subtitle
+local subtitle = Instance.new("TextLabel", hub)
+subtitle.Name = "Subtitle"
+subtitle.Size = UDim2.new(1, 0, 0, 20)
+subtitle.Position = UDim2.new(0, 0, 0, 50)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "Premium v13"
+subtitle.Font = Enum.Font.GothamBold
+subtitle.TextSize = 16
+subtitle.TextColor3 = Color3.fromRGB(150, 150, 170)
 
-toggleBtn.MouseEnter:Connect(function()
-    TweenService:Create(toggleBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(90,90,110)}):Play()
-    hoverSound:Play()
-end)
-toggleBtn.MouseLeave:Connect(function()
-    TweenService:Create(toggleBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(70,70,90)}):Play()
-end)
-toggleBtn.MouseButton1Click:Connect(function()
+-- Toggle switch for auto-tase
+local toggleFrame = Instance.new("Frame", hub)
+toggleFrame.Size = UDim2.new(0.6, 0, 0, 40)
+toggleFrame.Position = UDim2.new(0.2, 0, 0.5, 0)
+toggleFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+Instance.new("UICorner", toggleFrame).CornerRadius = UDim.new(1, 0)
+
+local toggleLabel = Instance.new("TextLabel", toggleFrame)
+toggleLabel.Size = UDim2.new(1, -50, 1, 0)
+toggleLabel.Position = UDim2.new(0, 0, 0, 0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.Text = "AUTO-TASE"
+toggleLabel.Font = Enum.Font.GothamBold
+toggleLabel.TextSize = 18
+toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local toggle = Instance.new("TextButton", toggleFrame)
+toggle.Size = UDim2.new(0, 40, 0, 30)
+toggle.Position = UDim2.new(1, -45, 0.5, -15)
+toggle.BackgroundColor3 = Color3.fromRGB(90, 200, 255)
+toggle.Text = ""
+toggle.AutoButtonColor = false
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(1, 0)
+
+local indicator = Instance.new("Frame", toggle)
+indicator.Size = UDim2.new(0, 24, 0, 24)
+indicator.Position = UDim2.new(0, 3, 0.5, -12)
+indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
+
+local function updateToggle()
+    if autoTaseEnabled then
+        TweenService:Create(indicator, TweenInfo.new(0.2), {Position = UDim2.new(1, -27, 0.5, -12)}):Play()
+        TweenService:Create(toggle, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(90, 200, 255)}):Play()
+    else
+        TweenService:Create(indicator, TweenInfo.new(0.2), {Position = UDim2.new(0, 3, 0.5, -12)}):Play()
+        TweenService:Create(toggle, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 70, 90)}):Play()
+    end
+end
+
+toggle.MouseButton1Click:Connect(function()
     autoTaseEnabled = not autoTaseEnabled
-    toggleBtn.Text = "AUTO-TASE: "..(autoTaseEnabled and "ON" or "OFF")
     clickSound:Play()
+    updateToggle()
 end)
 
--- DRAG HUB
+-- Dragging
 local dragging, dragInput, dragStart, startPos
 local function update(input)
     local delta = input.Position - dragStart
@@ -183,61 +258,84 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ORB BUTTON
+-- Orb button
 local orb = Instance.new("TextButton", screenGui)
-orb.Size = UDim2.new(0,50,0,50)
-orb.Position = UDim2.new(0.05,0,0.8,0)
+orb.Size = UDim2.new(0, 50, 0, 50)
+orb.Position = UDim2.new(0.05, 0, 0.8, 0)
 orb.Text = "☰"
 orb.Font = Enum.Font.GothamBold
 orb.TextSize = 22
-orb.BackgroundColor3 = Color3.fromRGB(40,40,60)
-orb.TextColor3 = Color3.fromRGB(255,255,255)
+orb.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+orb.TextColor3 = Color3.fromRGB(255, 255, 255)
 orb.Visible = false
-Instance.new("UICorner", orb).CornerRadius = UDim.new(1,0)
+Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
+Instance.new("UIStroke", orb).Color = Color3.fromRGB(90, 200, 255)
+Instance.new("UIStroke", orb).Thickness = 1
+Instance.new("UIStroke", orb).Transparency = 0.5
+
+orb.MouseEnter:Connect(function()
+    TweenService:Create(orb, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
+    hoverSound:Play()
+end)
+orb.MouseLeave:Connect(function()
+    TweenService:Create(orb, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 60)}):Play()
+end)
 orb.MouseButton1Click:Connect(function()
     hub.Visible = not hub.Visible
+    blur.Visible = hub.Visible
+    clickSound:Play()
 end)
 
 local function toggleHub()
     hub.Visible = true
     orb.Visible = true
+    blur.Visible = true
+    updateToggle()
 end
 
--- **NEW LOADER**
+-- // Loader
 local loader = Instance.new("Frame", screenGui)
-loader.Size = UDim2.new(1,0,1,0)
-loader.BackgroundColor3 = Color3.fromRGB(15,15,20)
+loader.Size = UDim2.new(1, 0, 1, 0)
+loader.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 
--- Progress bar background
+local logo = Instance.new("TextLabel", loader)
+logo.Size = UDim2.new(1, 0, 0.1, 0)
+logo.Position = UDim2.new(0, 0, 0.4, 0)
+logo.BackgroundTransparency = 1
+logo.Font = Enum.Font.GothamBold
+logo.TextSize = 48
+logo.TextColor3 = Color3.fromRGB(255, 255, 255)
+logo.Text = "YHub"
+local logoGradient = Instance.new("UIGradient", logo)
+logoGradient.Color = ColorSequence.new(Color3.fromRGB(90, 200, 255), Color3.fromRGB(255, 255, 255))
+logoGradient.Rotation = 90
+logo.TextTransparency = 1
+
 local progressBG = Instance.new("Frame", loader)
-progressBG.Size = UDim2.new(0.6,0,0.03,0)
-progressBG.Position = UDim2.new(0.2,0,0.8,0)
-progressBG.BackgroundColor3 = Color3.fromRGB(40,40,60)
-Instance.new("UICorner", progressBG).CornerRadius = UDim.new(0,10)
+progressBG.Size = UDim2.new(0.6, 0, 0.03, 0)
+progressBG.Position = UDim2.new(0.2, 0, 0.6, 0)
+progressBG.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+Instance.new("UICorner", progressBG).CornerRadius = UDim.new(0, 10)
 
--- Progress fill
 local progressFill = Instance.new("Frame", progressBG)
-progressFill.Size = UDim2.new(0,0,1,0)
-progressFill.BackgroundColor3 = Color3.fromRGB(90,200,255)
-Instance.new("UICorner", progressFill).CornerRadius = UDim.new(0,10)
+progressFill.Size = UDim2.new(0, 0, 1, 0)
+local fillGradient = Instance.new("UIGradient", progressFill)
+fillGradient.Color = ColorSequence.new(Color3.fromRGB(90, 200, 255), Color3.fromRGB(200, 230, 255))
+fillGradient.Rotation = 0
+Instance.new("UICorner", progressFill).CornerRadius = UDim.new(0, 10)
+progressFill.Transparency = 1
 
--- Loader text
-local loadText = Instance.new("TextLabel", loader)
-loadText.Size = UDim2.new(1,0,0.1,0)
-loadText.Position = UDim2.new(0,0,0.7,0)
-loadText.BackgroundTransparency = 1
-loadText.Font = Enum.Font.GothamBold
-loadText.TextSize = 28
-loadText.TextColor3 = Color3.fromRGB(255,255,255)
-loadText.Text = "Loading YHub Premium..."
-
--- Animate loader
 task.spawn(function()
-    for i=0,1,0.01 do
-        progressFill.Size = UDim2.new(i,0,1,0)
-        task.wait(0.03)
+    TweenService:Create(logo, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    task.wait(0.5)
+
+    for i = 0, 1, 0.01 do
+        progressFill.Size = UDim2.new(i, 0, 1, 0)
+        progressFill.Transparency = 0.5 - (i/2)
+        task.wait(0.01)
     end
-    task.wait(0.3)
+    task.wait(0.5)
+    TweenService:Create(loader, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     loader:Destroy()
     toggleHub()
 end)
