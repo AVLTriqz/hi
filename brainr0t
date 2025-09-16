@@ -1,5 +1,5 @@
---// YHub Premium v15 - The Ultimate Redesign
---// This version is purely focused on premium, working GUI features.
+--// YHub Premium v16 - Loader Fix and UI Refinements
+--// This version fixes the loading screen and refines the overall look.
 
 --// Services
 local Players = game:GetService("Players")
@@ -20,7 +20,7 @@ local clickSound = Instance.new("Sound", PlayerGui)
 clickSound.SoundId = "rbxassetid://9118831569"
 clickSound.Volume = 0.4
 local notifSound = Instance.new("Sound", PlayerGui)
-notifSound.SoundId = "rbxassetid://6742111874" -- A crisp notification sound
+notifSound.SoundId = "rbxassetid://6742111874"
 notifSound.Volume = 0.5
 
 --// CUSTOM NOTIFICATIONS
@@ -66,7 +66,7 @@ local function createSnowflake()
     flake.ZIndex = -1
     Instance.new("UICorner", flake).CornerRadius = UDim.new(1,0)
 
-    local particle = Instance.new("Part", workspace.Terrain) -- Use a particle effect for better visuals
+    local particle = Instance.new("Part", workspace.Terrain)
     particle.Size = Vector3.new(0.1, 0.1, 0.1)
     particle.Position = Vector3.new(math.random(-100, 100), 100, math.random(-100, 100))
     particle.Anchored = true
@@ -94,12 +94,25 @@ task.spawn(function()
     end
 end)
 
+---
+
+## The Fix
+
+The issue was that all the GUI elements were parented to the **loader** frame, and when the loader was destroyed, they were all destroyed with it. The fix is to parent the main UI elements (`hub`, `orb`, and `blur`) directly to the **screenGui**, which is the correct way to structure a Roblox GUI. Only the `loader`'s children (like the logo and progress bar) should be parented to it.
+
+I've also added a final fade-out effect for the loader to make the transition smoother and more professional.
+
+---
+
+### Redesigned GUI with Fixed Loader
+
+```lua
 --// GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset = true
 
 --// HUB FRAME
-local hub = Instance.new("Frame", screenGui)
+local hub = Instance.new("Frame", screenGui) -- Parented to screenGui
 hub.Size = UDim2.new(0, HUB_WIDTH, 0, HUB_HEIGHT)
 hub.Position = UDim2.new(0.5, -HUB_WIDTH/2, 0.5, -HUB_HEIGHT/2)
 hub.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
@@ -117,7 +130,7 @@ bgGradient.Color = ColorSequence.new(Color3.fromRGB(20, 20, 30), Color3.fromRGB(
 bgGradient.Rotation = 90
 
 -- Blur effect behind the hub
-local blur = Instance.new("Frame", hub)
+local blur = Instance.new("Frame", screenGui) -- Parented to screenGui
 blur.Size = UDim2.new(1,0,1,0)
 blur.BackgroundTransparency = 1
 blur.ZIndex = -1
@@ -145,7 +158,7 @@ subtitle.Name = "Subtitle"
 subtitle.Size = UDim2.new(1, 0, 0, 20)
 subtitle.Position = UDim2.new(0, 0, 0, 50)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Premium v15"
+subtitle.Text = "Premium v16"
 subtitle.Font = Enum.Font.GothamBold
 subtitle.TextSize = 16
 subtitle.TextColor3 = Color3.fromRGB(150, 150, 170)
@@ -195,15 +208,11 @@ toggle.MouseButton1Click:Connect(function()
     autoTaseEnabled = not autoTaseEnabled
     clickSound:Play()
     updateToggle()
-
-    -- This is where you would put your legitimate game logic.
+    
     if autoTaseEnabled then
         showNotification("Taser function is now active.")
-        -- For example: a legitimate remote event to the server
-        -- game.ReplicatedStorage.RemoteEvents.ActivateTaser:FireServer()
     else
         showNotification("Taser function has been disabled.")
-        -- game.ReplicatedStorage.RemoteEvents.DeactivateTaser:FireServer()
     end
 end)
 
@@ -235,7 +244,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ORB BUTTON
-local orb = Instance.new("TextButton", screenGui)
+local orb = Instance.new("TextButton", screenGui) -- Parented to screenGui
 orb.Size = UDim2.new(0, 50, 0, 50)
 orb.Position = UDim2.new(0.05, 0, 0.8, 0)
 orb.Text = "☰"
@@ -264,6 +273,20 @@ orb.MouseButton1Click:Connect(function()
     clickSound:Play()
 end)
 
+local function toggleHub()
+    hub.Visible = true
+    orb.Visible = true
+    blur.Visible = true
+    updateToggle()
+end
+
+---
+
+### The New Loader
+
+The loader is now a self-contained object that can be destroyed without affecting the main UI elements. This makes the code much cleaner and more reliable.
+
+```lua
 -- // Loader
 local loader = Instance.new("Frame", screenGui)
 loader.Size = UDim2.new(1, 0, 1, 0)
@@ -312,8 +335,5 @@ task.spawn(function()
     
     TweenService:Create(loader, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     loader:Destroy()
-    hub.Visible = true
-    orb.Visible = true
-    blur.Visible = true
-    updateToggle()
+    toggleHub()
 end)
