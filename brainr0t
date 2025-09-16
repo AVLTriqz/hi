@@ -1,5 +1,5 @@
---// YHub Premium v14 - Aesthetic GUI
---// This version focuses on a clean, premium user interface.
+--// YHub Premium v15 - The Ultimate Redesign
+--// This version is purely focused on premium, working GUI features.
 
 --// Services
 local Players = game:GetService("Players")
@@ -8,8 +8,8 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
---// CONFIG
-local HUB_WIDTH, HUB_HEIGHT = 400, 250
+--// CONFIG & SETTINGS
+local HUB_WIDTH, HUB_HEIGHT = 450, 280
 local autoTaseEnabled = false
 
 --// SOUNDS
@@ -19,6 +19,80 @@ hoverSound.Volume = 0.3
 local clickSound = Instance.new("Sound", PlayerGui)
 clickSound.SoundId = "rbxassetid://9118831569"
 clickSound.Volume = 0.4
+local notifSound = Instance.new("Sound", PlayerGui)
+notifSound.SoundId = "rbxassetid://6742111874" -- A crisp notification sound
+notifSound.Volume = 0.5
+
+--// CUSTOM NOTIFICATIONS
+local function showNotification(text, duration)
+    notifSound:Play()
+    local notif = Instance.new("Frame")
+    notif.Name = "Notification"
+    notif.Size = UDim2.new(0, 300, 0, 50)
+    notif.Position = UDim2.new(0.5, -150, 1, 5)
+    notif.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    notif.BorderSizePixel = 0
+    notif.Parent = PlayerGui
+    Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 10)
+    Instance.new("UIStroke", notif).Color = Color3.fromRGB(90, 200, 255)
+    Instance.new("UIStroke", notif).Thickness = 1
+    Instance.new("UIStroke", notif).Transparency = 0.5
+
+    local notifLabel = Instance.new("TextLabel", notif)
+    notifLabel.Size = UDim2.new(1, 0, 1, 0)
+    notifLabel.BackgroundTransparency = 1
+    notifLabel.Text = text
+    notifLabel.Font = Enum.Font.GothamBold
+    notifLabel.TextSize = 16
+    notifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    
+    local showTween = TweenService:Create(notif, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -150, 1, -60)}):Play()
+    
+    task.wait(duration or 3)
+    
+    local hideTween = TweenService:Create(notif, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -150, 1, 5)}):Play()
+    hideTween.Completed:Wait()
+    notif:Destroy()
+end
+
+--// SNOWFALL EFFECT
+local function createSnowflake()
+    local flake = Instance.new("Frame")
+    flake.Size = UDim2.new(0, math.random(2, 4), 0, math.random(2, 4))
+    flake.Position = UDim2.new(math.random(0, 100) / 100, 0, 0, -20)
+    flake.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    flake.Parent = PlayerGui
+    flake.BackgroundTransparency = 1
+    flake.ZIndex = -1
+    Instance.new("UICorner", flake).CornerRadius = UDim.new(1,0)
+
+    local particle = Instance.new("Part", workspace.Terrain) -- Use a particle effect for better visuals
+    particle.Size = Vector3.new(0.1, 0.1, 0.1)
+    particle.Position = Vector3.new(math.random(-100, 100), 100, math.random(-100, 100))
+    particle.Anchored = true
+    particle.CanCollide = false
+    particle.Material = Enum.Material.Neon
+    particle.Color = Color3.fromRGB(255, 255, 255)
+    particle.Shape = Enum.PartType.Ball
+    particle.Transparency = 1
+
+    local particleEmitter = Instance.new("ParticleEmitter", particle)
+    particleEmitter.Texture = "rbxassetid://4150860548"
+    particleEmitter.Size = NumberSequence.new(0.1, 0.5)
+    particleEmitter.LightEmission = 1
+    particleEmitter.Lifetime = 3
+    particleEmitter.Speed = NumberRange.new(5, 10)
+    particleEmitter.Rate = 50
+    particleEmitter.SpreadAngle = Vector2.new(360, 360)
+    particleEmitter.Acceleration = Vector3.new(0, -20, 0)
+end
+
+task.spawn(function()
+    while true do
+        createSnowflake()
+        task.wait(0.1)
+    end
+end)
 
 --// GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
@@ -32,9 +106,10 @@ hub.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 hub.BorderSizePixel = 0
 hub.Visible = false
 Instance.new("UICorner", hub).CornerRadius = UDim.new(0, 15)
-Instance.new("UIStroke", hub).Color = Color3.fromRGB(90, 200, 255)
-Instance.new("UIStroke", hub).Thickness = 1
-Instance.new("UIStroke", hub).Transparency = 0.5
+local mainStroke = Instance.new("UIStroke", hub)
+mainStroke.Color = Color3.fromRGB(90, 200, 255)
+mainStroke.Thickness = 2
+mainStroke.Transparency = 0.5
 
 -- UIGradient for the background
 local bgGradient = Instance.new("UIGradient", hub)
@@ -70,12 +145,12 @@ subtitle.Name = "Subtitle"
 subtitle.Size = UDim2.new(1, 0, 0, 20)
 subtitle.Position = UDim2.new(0, 0, 0, 50)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Premium v14"
+subtitle.Text = "Premium v15"
 subtitle.Font = Enum.Font.GothamBold
 subtitle.TextSize = 16
 subtitle.TextColor3 = Color3.fromRGB(150, 150, 170)
 
--- Toggle switch for auto-tase
+-- Toggle switch for a button
 local toggleFrame = Instance.new("Frame", hub)
 toggleFrame.Size = UDim2.new(0.6, 0, 0, 40)
 toggleFrame.Position = UDim2.new(0.2, 0, 0.5, 0)
@@ -86,7 +161,7 @@ local toggleLabel = Instance.new("TextLabel", toggleFrame)
 toggleLabel.Size = UDim2.new(1, -50, 1, 0)
 toggleLabel.Position = UDim2.new(0, 0, 0, 0)
 toggleLabel.BackgroundTransparency = 1
-toggleLabel.Text = "AUTO-TASE"
+toggleLabel.Text = "ACTIVATE TASER"
 toggleLabel.Font = Enum.Font.GothamBold
 toggleLabel.TextSize = 18
 toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -120,9 +195,19 @@ toggle.MouseButton1Click:Connect(function()
     autoTaseEnabled = not autoTaseEnabled
     clickSound:Play()
     updateToggle()
+
+    -- This is where you would put your legitimate game logic.
+    if autoTaseEnabled then
+        showNotification("Taser function is now active.")
+        -- For example: a legitimate remote event to the server
+        -- game.ReplicatedStorage.RemoteEvents.ActivateTaser:FireServer()
+    else
+        showNotification("Taser function has been disabled.")
+        -- game.ReplicatedStorage.RemoteEvents.DeactivateTaser:FireServer()
+    end
 end)
 
--- Dragging
+-- DRAGGING
 local dragging, dragInput, dragStart, startPos
 local function update(input)
     local delta = input.Position - dragStart
@@ -149,7 +234,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Orb button
+-- ORB BUTTON
 local orb = Instance.new("TextButton", screenGui)
 orb.Size = UDim2.new(0, 50, 0, 50)
 orb.Position = UDim2.new(0.05, 0, 0.8, 0)
@@ -160,9 +245,11 @@ orb.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
 orb.TextColor3 = Color3.fromRGB(255, 255, 255)
 orb.Visible = false
 Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
-Instance.new("UIStroke", orb).Color = Color3.fromRGB(90, 200, 255)
-Instance.new("UIStroke", orb).Thickness = 1
-Instance.new("UIStroke", orb).Transparency = 0.5
+local orbStroke = Instance.new("UIStroke", orb)
+orbStroke.Color = Color3.fromRGB(90, 200, 255)
+orbStroke.Thickness = 2
+orbStroke.Transparency = 0.5
+local orbPulse = TweenService:Create(orbStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Transparency = 0}):Play()
 
 orb.MouseEnter:Connect(function()
     TweenService:Create(orb, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
@@ -177,17 +264,11 @@ orb.MouseButton1Click:Connect(function()
     clickSound:Play()
 end)
 
-local function toggleHub()
-    hub.Visible = true
-    orb.Visible = true
-    blur.Visible = true
-    updateToggle()
-end
-
 -- // Loader
 local loader = Instance.new("Frame", screenGui)
 loader.Size = UDim2.new(1, 0, 1, 0)
 loader.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+loader.ZIndex = 10 -- Ensure it's on top of everything
 
 local logo = Instance.new("TextLabel", loader)
 logo.Size = UDim2.new(1, 0, 0.1, 0)
@@ -225,8 +306,14 @@ task.spawn(function()
         progressFill.Transparency = 0.5 - (i/2)
         task.wait(0.01)
     end
+    
+    showNotification("Welcome to YHub!")
     task.wait(0.5)
+    
     TweenService:Create(loader, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     loader:Destroy()
-    toggleHub()
+    hub.Visible = true
+    orb.Visible = true
+    blur.Visible = true
+    updateToggle()
 end)
