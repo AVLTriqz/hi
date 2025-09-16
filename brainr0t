@@ -1,4 +1,4 @@
--- YHub Premium Mobile v12 (Enhanced UI + fixed drag + animations + notifications)
+-- YHub Premium Mobile v13 (Enhanced GUI & Features)
 -- StarterPlayerScripts LocalScript
 
 local Players = game:GetService("Players")
@@ -6,39 +6,30 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ===== CONFIG =====
+-- CONFIG
 local TASER_NAME = "Taser Gun"
 local AUTO_TASE_RADIUS = 14
-local HUB_WIDTH = 360
-local HUB_HEIGHT = 200
+local HUB_WIDTH, HUB_HEIGHT = 320, 180
 local autoTaseEnabled = false
 local auraPart, fovCircle
 
 -- ===== Sounds =====
-local function makeSound(parent, assetId, volume, name)
-    local s = Instance.new("Sound", parent)
-    s.Name = name or "Sound"
-    s.SoundId = "rbxassetid://"..tostring(assetId)
-    s.Volume = volume or 0.5
-    s.RollOffMode = Enum.RollOffMode.Linear
-    s.MaxDistance = 100
+local function createSound(id, vol)
+    local s = Instance.new("Sound", PlayerGui)
+    s.SoundId = "rbxassetid://" .. id
+    s.Volume = vol or 0.4
     return s
 end
 
-local soundHolder = Instance.new("Folder", PlayerGui)
-soundHolder.Name = "YHubSounds"
+local hoverSound = createSound("9118825481", 0.3)
+local clickSound = createSound("9118831569", 0.5)
+local openSound = createSound("12221967", 0.5)
+local notifSound = createSound("9119136260", 0.4)
 
-local hoverSound = makeSound(soundHolder, 9118825481, 0.25, "Hover")
-local clickSound = makeSound(soundHolder, 9118831569, 0.5, "Click")
-local toggleSound = makeSound(soundHolder, 9118812345, 0.5, "Toggle") -- change ID to preferred
-local openSound   = makeSound(soundHolder, 9118800001, 0.6, "Open")
-local notifSound  = makeSound(soundHolder, 9118840001, 0.6, "Notif")
-
--- ===== Utilities =====
+-- ===== Utility =====
 local function equipTaser()
     local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
     if tool then
@@ -49,24 +40,18 @@ local function equipTaser()
     end
 end
 
--- Aura around player
+-- Aura + FOV
 local function createAura()
     if auraPart then auraPart:Destroy() end
-    local part = Instance.new("Part")
-    part.Name = "YHubAura"
-    part.Size = Vector3.new(AUTO_TASE_RADIUS*2, AUTO_TASE_RADIUS*2, AUTO_TASE_RADIUS*2)
-    part.Anchored = true
-    part.CanCollide = false
-    part.Material = Enum.Material.Neon
-    part.Shape = Enum.PartType.Ball
-    part.Transparency = 0.6
-    part.Parent = workspace
-    auraPart = part
+    auraPart = Instance.new("Part")
+    auraPart.Size = Vector3.new(AUTO_TASE_RADIUS*2, AUTO_TASE_RADIUS*2, AUTO_TASE_RADIUS*2)
+    auraPart.Anchored, auraPart.CanCollide, auraPart.Material = true, false, Enum.Material.Neon
+    auraPart.Shape, auraPart.Transparency, auraPart.Parent = Enum.PartType.Ball, 0.6, workspace
     spawn(function()
-        local t = 0
+        local t=0
         while auraPart and auraPart.Parent do
-            t = t + 0.007
-            auraPart.Color = Color3.fromHSV(t%1,0.95,0.95)
+            t += 0.01
+            auraPart.Color = Color3.fromHSV(t%1,0.9,1)
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 auraPart.CFrame = char.HumanoidRootPart.CFrame
@@ -76,24 +61,16 @@ local function createAura()
     end)
 end
 
--- Rainbow FOV circle
 local function createFOVCircle()
     if fovCircle then fovCircle:Destroy() end
-    local part = Instance.new("Part")
-    part.Name = "YHubFOV"
-    part.Anchored = true
-    part.CanCollide = false
-    part.Size = Vector3.new(AUTO_TASE_RADIUS*2,0.2,AUTO_TASE_RADIUS*2)
-    part.Material = Enum.Material.Neon
-    part.Transparency = 0.55
-    part.Shape = Enum.PartType.Cylinder
-    part.Parent = workspace
-    fovCircle = part
+    fovCircle = Instance.new("Part")
+    fovCircle.Anchored, fovCircle.CanCollide, fovCircle.Material = true, false, Enum.Material.Neon
+    fovCircle.Size, fovCircle.Shape, fovCircle.Transparency, fovCircle.Parent = Vector3.new(AUTO_TASE_RADIUS*2,0.2,AUTO_TASE_RADIUS*2), Enum.PartType.Cylinder, 0.5, workspace
     spawn(function()
-        local t = 0
+        local t=0
         while fovCircle and fovCircle.Parent do
-            t = t + 0.007
-            fovCircle.Color = Color3.fromHSV(t%1,0.95,0.95)
+            t += 0.01
+            fovCircle.Color = Color3.fromHSV(t%1,0.9,1)
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 fovCircle.CFrame = CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,0.3,0)) * CFrame.Angles(math.rad(90),0,0)
@@ -103,456 +80,118 @@ local function createFOVCircle()
     end)
 end
 
--- Auto-tase loop (robust, won't spawn runaway threads)
-local autoTaseConnection
-local function startAutoTaseLoop()
-    if autoTaseConnection then return end
-    autoTaseConnection = RunService.RenderStepped:Connect(function()
-        if autoTaseEnabled then
-            local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if not auraPart then createAura() end
-                if not fovCircle then createFOVCircle() end
-                local taser = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or (char and char:FindFirstChild(TASER_NAME))
-                if taser then
-                    for _,pl in ipairs(Players:GetPlayers()) do
-                        if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
-                            local otherHRP = pl.Character.HumanoidRootPart
-                            if (hrp.Position - otherHRP.Position).Magnitude <= AUTO_TASE_RADIUS then
-                                -- Activate if available
-                                pcall(function() taser:Activate() end)
+-- Auto-tase
+local function autoTaseLoop()
+    spawn(function()
+        while true do
+            RunService.RenderStepped:Wait()
+            if autoTaseEnabled then
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if not auraPart then createAura() end
+                    if not fovCircle then createFOVCircle() end
+                    local taser = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or (char and char:FindFirstChild(TASER_NAME))
+                    if taser then
+                        for _,pl in ipairs(Players:GetPlayers()) do
+                            if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+                                if (hrp.Position - pl.Character.HumanoidRootPart.Position).Magnitude <= AUTO_TASE_RADIUS then
+                                    taser:Activate()
+                                end
                             end
                         end
                     end
                 end
+            else
+                if auraPart then auraPart:Destroy(); auraPart=nil end
+                if fovCircle then fovCircle:Destroy(); fovCircle=nil end
             end
-        else
-            if auraPart then auraPart:Destroy(); auraPart=nil end
-            if fovCircle then fovCircle:Destroy(); fovCircle=nil end
         end
     end)
 end
 
-local function stopAutoTaseLoop()
-    if autoTaseConnection then
-        autoTaseConnection:Disconnect()
-        autoTaseConnection = nil
+-- ===== GUI =====
+local screenGui = Instance.new("ScreenGui", PlayerGui)
+screenGui.IgnoreGuiInset, screenGui.ResetOnSpawn = true, false
+
+-- Movable Toggle Button
+local toggleButton = Instance.new("TextButton", screenGui)
+toggleButton.Size = UDim2.new(0,100,0,40)
+toggleButton.Position = UDim2.new(0.05,0,0.8,0)
+toggleButton.Text, toggleButton.Font, toggleButton.TextSize = "YHub ⚡", Enum.Font.GothamBold, 18
+toggleButton.BackgroundColor3, toggleButton.TextColor3 = Color3.fromRGB(40,40,55), Color3.fromRGB(255,255,255)
+Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(0,12)
+local dragging, dragInput, dragStart, startPos
+toggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+        dragging, dragStart, startPos = true, input.Position, toggleButton.Position
+        input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
     end
-end
+end)
+toggleButton.InputChanged:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then dragInput=input end end)
+RunService.RenderStepped:Connect(function()
+    if dragging and dragInput then
+        local delta = dragInput.Position - dragStart
+        toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
+    end
+end)
 
--- ===== GUI CREATION =====
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "YHubPremiumGUI"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.Parent = PlayerGui
-
--- Notification container
-local notifContainer = Instance.new("Frame", screenGui)
-notifContainer.Name = "NotifContainer"
-notifContainer.AnchorPoint = Vector2.new(1,0)
-notifContainer.Position = UDim2.new(1,-16,0.02,0)
-notifContainer.Size = UDim2.new(0,280,0,200)
-notifContainer.BackgroundTransparency = 1
-notifContainer.ClipsDescendants = true
-
--- Fancy loading screen
-local loading = Instance.new("Frame", screenGui)
-loading.Name = "YHubLoading"
-loading.Size = UDim2.new(1,0,1,0)
-loading.BackgroundColor3 = Color3.fromRGB(12,12,20)
-
-local loadingBlur = Instance.new("UIGradient", loading)
-loadingBlur.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(15,15,35)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(25,8,40))
-}
-loadingBlur.Rotation = 90
-
-local loadText = Instance.new("TextLabel", loading)
-loadText.AnchorPoint = Vector2.new(0.5,0.5)
-loadText.Position = UDim2.new(0.5,0,0.42,0)
-loadText.Size = UDim2.new(0.8,0,0.12,0)
-loadText.BackgroundTransparency = 1
-loadText.Font = Enum.Font.GothamBold
-loadText.TextSize = 28
-loadText.TextColor3 = Color3.fromRGB(210,210,255)
-loadText.Text = "YHub · Initializing..."
-
-local loadBarBG = Instance.new("Frame", loading)
-loadBarBG.AnchorPoint = Vector2.new(0.5,0)
-loadBarBG.Position = UDim2.new(0.5,0,0.62,0)
-loadBarBG.Size = UDim2.new(0.6,0,0.04,0)
-loadBarBG.BackgroundColor3 = Color3.fromRGB(40,40,60)
-loadBarBG.BorderSizePixel = 0
-loadBarBG.ClipsDescendants = true
-local loadBarCorner = Instance.new("UICorner", loadBarBG)
-loadBarCorner.CornerRadius = UDim.new(0,12)
-
-local loadBar = Instance.new("Frame", loadBarBG)
-loadBar.Size = UDim2.new(0,0,1,0)
-loadBar.BackgroundColor3 = Color3.fromRGB(100,220,255)
-local loadBarCorner2 = Instance.new("UICorner", loadBar)
-loadBarCorner2.CornerRadius = UDim.new(0,12)
-
-local loadingSpark = Instance.new("ParticleEmitter", loadBarBG)
-loadingSpark.Texture = "rbxassetid://243098098"
-loadingSpark.Speed = NumberRange.new(0,0.2)
-loadingSpark.Rate = 10
-loadingSpark.Lifetime = NumberRange.new(0.2,0.5)
-loadingSpark.Transparency = NumberSequence.new(0.2)
-
--- Hub frame (initially hidden)
+-- Hub Frame
 local hub = Instance.new("Frame", screenGui)
-hub.Name = "YHubHub"
 hub.Size = UDim2.new(0,HUB_WIDTH,0,HUB_HEIGHT)
-hub.Position = UDim2.new(0.5,-HUB_WIDTH/2,0.4,-HUB_HEIGHT/2)
-hub.AnchorPoint = Vector2.new(0,0)
-hub.BackgroundColor3 = Color3.fromRGB(20,20,30)
-hub.Visible = false
-hub.ClipsDescendants = true
-local hubCorner = Instance.new("UICorner", hub)
-hubCorner.CornerRadius = UDim.new(0,20)
+hub.Position = UDim2.new(0.5,-HUB_WIDTH/2,0.5,-HUB_HEIGHT/2)
+hub.BackgroundColor3, hub.Visible = Color3.fromRGB(25,25,35), false
+Instance.new("UICorner", hub).CornerRadius = UDim.new(0,18)
+local stroke = Instance.new("UIStroke", hub)
+stroke.Thickness, stroke.Color = 2, Color3.fromRGB(0,255,255)
 
-local hubStroke = Instance.new("UIStroke", hub)
-hubStroke.Thickness = 2
-hubStroke.Transparency = 0.6
-hubStroke.Color = Color3.fromRGB(80,160,255)
+-- Title
+local title = Instance.new("TextLabel", hub)
+title.Size = UDim2.new(1,0,0,40)
+title.Text, title.Font, title.TextSize = "⚡ YHub Premium", Enum.Font.GothamBold, 24
+title.BackgroundTransparency, title.TextColor3 = 1, Color3.fromRGB(255,255,255)
 
--- Subtle floating (bob) effect
-spawn(function()
-    local basePos = hub.Position
-    local t = 0
-    while hub.Parent do
-        t = t + 0.006
-        local yOffset = math.sin(t) * 4
-        if hub.Visible then
-            hub.Position = UDim2.new(basePos.X.Scale, basePos.X.Offset, basePos.Y.Scale, basePos.Y.Offset + yOffset)
-        end
-        RunService.RenderStepped:Wait()
-    end
-end)
-
--- Background glow behind hub
-local hubGlow = Instance.new("Frame", hub)
-hubGlow.Size = UDim2.new(1.4,0,1.4,0)
-hubGlow.Position = UDim2.new(-0.2,0,-0.2,0)
-hubGlow.BackgroundColor3 = Color3.fromRGB(0,200,255)
-hubGlow.BackgroundTransparency = 0.92
-local hubGlowCorner = Instance.new("UICorner", hubGlow)
-hubGlowCorner.CornerRadius = UDim.new(0,50)
-local hubGlowStroke = Instance.new("UIStroke", hubGlow)
-hubGlowStroke.Thickness = 3
-
--- Title bar (also drag handle)
-local titleBar = Instance.new("Frame", hub)
-titleBar.Size = UDim2.new(1,0,0,44)
-titleBar.BackgroundTransparency = 1
-titleBar.BorderSizePixel = 0
-
-local title = Instance.new("TextLabel", titleBar)
-title.Size = UDim2.new(0.7,0,1,0)
-title.Position = UDim2.new(0,12,0,0)
-title.BackgroundTransparency = 1
-title.Text = "YHub Premium"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 20
-title.TextColor3 = Color3.fromRGB(220,220,255)
-title.TextXAlignment = Enum.TextXAlignment.Left
-
-local titleAccent = Instance.new("Frame", titleBar)
-titleAccent.Size = UDim2.new(0,8,0,8)
-titleAccent.Position = UDim2.new(0,4,0.5,-4)
-titleAccent.BackgroundColor3 = Color3.fromRGB(80,200,255)
-titleAccent.BorderSizePixel = 0
-local _ = Instance.new("UICorner", titleAccent)
-
--- Close button
-local closeBtn = Instance.new("TextButton", titleBar)
-closeBtn.AnchorPoint = Vector2.new(1,0.5)
-closeBtn.Position = UDim2.new(1,-12,0.5,0)
-closeBtn.Size = UDim2.new(0,36,0,28)
-closeBtn.Text = "✕"
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 18
-closeBtn.BackgroundTransparency = 0.9
-closeBtn.TextColor3 = Color3.fromRGB(220,220,225)
-local closeCorner = Instance.new("UICorner", closeBtn)
-closeCorner.CornerRadius = UDim.new(0,8)
-
--- Content area
-local content = Instance.new("Frame", hub)
-content.Size = UDim2.new(1,-24,1,-60)
-content.Position = UDim2.new(0,12,0,52)
-content.BackgroundTransparency = 1
-
--- Auto-Tase toggle (stylish)
-local toggleBtn = Instance.new("TextButton", content)
-toggleBtn.Size = UDim2.new(0.56,0,0,48)
-toggleBtn.Position = UDim2.new(0,0,0,0)
-toggleBtn.Text = ""
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 18
-toggleBtn.BackgroundColor3 = Color3.fromRGB(40,40,50)
-toggleBtn.AutoButtonColor = false
-local toggleCorner = Instance.new("UICorner", toggleBtn)
-toggleCorner.CornerRadius = UDim.new(0,14)
-
-local toggleLabel = Instance.new("TextLabel", toggleBtn)
-toggleLabel.AnchorPoint = Vector2.new(0,0.5)
-toggleLabel.Position = UDim2.new(0.04,0,0.5,0)
-toggleLabel.BackgroundTransparency = 1
-toggleLabel.Size = UDim2.new(0.6,0,0.9,0)
-toggleLabel.Text = "AUTO-TASE"
-toggleLabel.Font = Enum.Font.GothamBold
-toggleLabel.TextSize = 16
-toggleLabel.TextColor3 = Color3.fromRGB(220,220,230)
-toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local toggleIndicatorBG = Instance.new("Frame", toggleBtn)
-toggleIndicatorBG.AnchorPoint = Vector2.new(1,0.5)
-toggleIndicatorBG.Position = UDim2.new(0.95,0,0.5,0)
-toggleIndicatorBG.Size = UDim2.new(0,60,0,30)
-toggleIndicatorBG.BackgroundColor3 = Color3.fromRGB(30,30,38)
-local toggleIndicatorCorner = Instance.new("UICorner", toggleIndicatorBG)
-toggleIndicatorCorner.CornerRadius = UDim.new(0,14)
-local toggleIndicatorFill = Instance.new("Frame", toggleIndicatorBG)
-toggleIndicatorFill.Size = UDim2.new(0.02,0,1,0)
-toggleIndicatorFill.Position = UDim2.new(0,0,0,0)
-toggleIndicatorFill.BackgroundColor3 = Color3.fromRGB(180,180,180)
-local toggleFillCorner = Instance.new("UICorner", toggleIndicatorFill)
-toggleFillCorner.CornerRadius = UDim.new(0,14)
-
--- Fancy sparkles on toggle
-local function createSparkles(parent)
-    local ps = Instance.new("ParticleEmitter", parent)
-    ps.Texture = "rbxassetid://243098098"
-    ps.Color = ColorSequence.new(Color3.fromRGB(0,200,255),Color3.fromRGB(255,0,200))
-    ps.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0.2),NumberSequenceKeypoint.new(1,0.05)})
-    ps.Rate = 8
-    ps.Lifetime = NumberRange.new(0.5,1)
-    ps.Speed = NumberRange.new(0,0.3)
-    ps.SpreadAngle = Vector2.new(360,360)
-    return ps
-end
-createSparkles(toggleBtn)
-
--- Extra button examples (advanced settings)
-local openEquipBtn = Instance.new("TextButton", content)
-openEquipBtn.Size = UDim2.new(0.36,0,0,40)
-openEquipBtn.Position = UDim2.new(0.62,0,0,4)
-openEquipBtn.Text = "Equip Taser"
-openEquipBtn.Font = Enum.Font.GothamBold
-openEquipBtn.TextSize = 16
-openEquipBtn.BackgroundColor3 = Color3.fromRGB(45,45,60)
-local openEquipCorner = Instance.new("UICorner", openEquipBtn)
-openEquipCorner.CornerRadius = UDim.new(0,12)
-
--- Status text
-local statusLabel = Instance.new("TextLabel", content)
-statusLabel.AnchorPoint = Vector2.new(0,0)
-statusLabel.Position = UDim2.new(0,0,0,56)
-statusLabel.Size = UDim2.new(1,0,0,26)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Status: Idle"
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 14
-statusLabel.TextColor3 = Color3.fromRGB(180,180,220)
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-
--- ===== Notification system =====
-local function showNotification(titleText, bodyText, duration)
-    duration = duration or 4
-    local notif = Instance.new("Frame", notifContainer)
-    notif.AnchorPoint = Vector2.new(1,0)
-    notif.Position = UDim2.new(1,0,0,0)
-    notif.Size = UDim2.new(0,260,0,72)
-    notif.BackgroundColor3 = Color3.fromRGB(18,18,28)
-    notif.BackgroundTransparency = 0
-    notif.BorderSizePixel = 0
-    notif.ClipsDescendants = true
-    local nCorner = Instance.new("UICorner", notif); nCorner.CornerRadius = UDim.new(0,10)
-    local nStroke = Instance.new("UIStroke", notif); nStroke.Transparency = 0.7; nStroke.Thickness = 1
-
-    local leftAccent = Instance.new("Frame", notif)
-    leftAccent.Size = UDim2.new(0,6,1,0)
-    leftAccent.Position = UDim2.new(0,0,0,0)
-    leftAccent.BackgroundColor3 = Color3.fromRGB(80,200,255)
-    local _ = Instance.new("UICorner", leftAccent)
-
-    local titleLabel = Instance.new("TextLabel", notif)
-    titleLabel.Position = UDim2.new(0,12,0,8)
-    titleLabel.Size = UDim2.new(1,-24,0,22)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.TextSize = 16
-    titleLabel.Text = titleText or "Notification"
-    titleLabel.TextColor3 = Color3.fromRGB(240,240,255)
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-    local bodyLabel = Instance.new("TextLabel", notif)
-    bodyLabel.Position = UDim2.new(0,12,0,30)
-    bodyLabel.Size = UDim2.new(1,-24,0,36)
-    bodyLabel.BackgroundTransparency = 1
-    bodyLabel.Font = Enum.Font.Gotham
-    bodyLabel.TextSize = 13
-    bodyLabel.Text = bodyText or ""
-    bodyLabel.TextColor3 = Color3.fromRGB(185,185,210)
-    bodyLabel.TextWrapped = true
-    bodyLabel.TextXAlignment = Enum.TextXAlignment.Left
-    bodyLabel.TextYAlignment = Enum.TextYAlignment.Top
-
-    -- entrance animation
-    notif.Position = UDim2.new(1,300,0,0)
-    TweenService:Create(notif, TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.new(1,0,0,0)}):Play()
-    notifSound:Play()
-
-    -- auto destroy
-    delay(duration, function()
-        TweenService:Create(notif, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1,300,0,0)}):Play()
-        wait(0.35)
-        notif:Destroy()
-    end)
-end
-
--- ===== Button interactions & behaviors =====
-
--- Toggle state ui update
-local function updateToggleUI(state)
-    if state then
-        -- ON state
-        TweenService:Create(toggleBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(55,110,255)}):Play()
-        TweenService:Create(toggleIndicatorFill, TweenInfo.new(0.35, Enum.EasingStyle.Back), {Size = UDim2.new(1,0,1,0)}):Play()
-        toggleLabel.TextColor3 = Color3.fromRGB(245,245,255)
-        statusLabel.Text = "Status: Auto-tase Active • Radius: "..tostring(AUTO_TASE_RADIUS)
-    else
-        -- OFF state
-        TweenService:Create(toggleBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(40,40,50)}):Play()
-        TweenService:Create(toggleIndicatorFill, TweenInfo.new(0.35, Enum.EasingStyle.Back), {Size = UDim2.new(0.02,0,1,0)}):Play()
-        toggleLabel.TextColor3 = Color3.fromRGB(220,220,230)
-        statusLabel.Text = "Status: Idle"
-    end
-end
-
-toggleBtn.MouseEnter:Connect(function()
-    TweenService:Create(toggleBtn,TweenInfo.new(0.16),{BackgroundTransparency = 0}):Play()
-    hoverSound:Play()
-end)
-toggleBtn.MouseLeave:Connect(function()
-    TweenService:Create(toggleBtn,TweenInfo.new(0.16),{BackgroundTransparency = 0}):Play()
-end)
-
-toggleBtn.MouseButton1Click:Connect(function()
+-- Auto-tase Toggle
+local autoBtn = Instance.new("TextButton", hub)
+autoBtn.Size, autoBtn.Position = UDim2.new(0.6,0,0.2,0), UDim2.new(0.2,0,0.5,0)
+autoBtn.Text, autoBtn.Font, autoBtn.TextSize = "AUTO-TASE: OFF", Enum.Font.GothamBold, 20
+autoBtn.BackgroundColor3, autoBtn.TextColor3 = Color3.fromRGB(60,60,85), Color3.fromRGB(255,255,255)
+Instance.new("UICorner", autoBtn).CornerRadius = UDim.new(0,12)
+autoBtn.MouseButton1Click:Connect(function()
     autoTaseEnabled = not autoTaseEnabled
-    updateToggleUI(autoTaseEnabled)
-    if autoTaseEnabled then
-        startAutoTaseLoop()
-        showNotification("Auto-Tase", "Auto-tase enabled.", 3)
+    autoBtn.Text = "AUTO-TASE: "..(autoTaseEnabled and "ON" or "OFF")
+    clickSound:Play()
+end)
+
+-- Open/Close Animation
+local hubOpen = false
+local function toggleHub()
+    hubOpen = not hubOpen
+    if hubOpen then
+        hub.Visible = true
+        hub.Size = UDim2.new(0,HUB_WIDTH*0.2,0,HUB_HEIGHT*0.2)
+        TweenService:Create(hub,TweenInfo.new(0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,HUB_WIDTH,0,HUB_HEIGHT)}):Play()
+        openSound:Play()
     else
-        showNotification("Auto-Tase", "Auto-tase disabled.", 3)
+        TweenService:Create(hub,TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{Size=UDim2.new(0,0,0,0)}):Play()
+        task.delay(0.25,function() if not hubOpen then hub.Visible=false end end)
     end
-    toggleSound:Play()
-    clickSound:Play()
-end)
+end
+toggleButton.MouseButton1Click:Connect(toggleHub)
 
-openEquipBtn.MouseButton1Click:Connect(function()
-    clickSound:Play()
-    equipTaser()
-    showNotification("Taser", "Taser equipped to backpack.", 3)
-end)
-
-closeBtn.MouseButton1Click:Connect(function()
-    clickSound:Play()
-    TweenService:Create(hub, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1}):Play()
-    delay(0.35, function()
-        hub.Visible = false
-        hub.Size = UDim2.new(0,HUB_WIDTH,0,HUB_HEIGHT)
-        hub.BackgroundTransparency = 0
-    end)
-    showNotification("YHub", "Hub closed. Reopen via command or toggle.", 3)
-end)
-
--- ===== Dragging (fixed & clamped) =====
-local dragging = false
-local dragStart = Vector2.new()
-local startPos = UDim2.new()
-local dragConnection, inputConnection
-
-local function clampHubPosition(px, py)
-    -- screen bounds clamping so hub always visible
-    local absX = px
-    local absY = py
-    local screenW = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X or 1280
-    local screenH = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 720
-    local minX = 0
-    local maxX = screenW - HUB_WIDTH
-    local minY = 0
-    local maxY = screenH - HUB_HEIGHT
-    local clampedX = math.clamp(absX, minX, maxX)
-    local clampedY = math.clamp(absY, minY, maxY)
-    return UDim2.new(0, clampedX, 0, clampedY)
+-- Fancy Notifications
+local function notify(msg)
+    notifSound:Play()
+    local n = Instance.new("TextLabel", screenGui)
+    n.Size, n.Position = UDim2.new(0,220,0,40), UDim2.new(0.5,-110,0.9,0)
+    n.BackgroundColor3, n.TextColor3 = Color3.fromRGB(30,30,45), Color3.fromRGB(255,255,255)
+    n.Font, n.TextSize, n.Text = Enum.Font.GothamBold, 18, msg
+    Instance.new("UICorner", n).CornerRadius = UDim.new(0,10)
+    TweenService:Create(n,TweenInfo.new(0.3),{Position=UDim2.new(0.5,-110,0.8,0)}):Play()
+    task.delay(3,function() TweenService:Create(n,TweenInfo.new(0.3),{Position=UDim2.new(0.5,-110,1.2,0)}):Play(); task.wait(0.3); n:Destroy() end)
 end
 
-titleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        local absPos = hub.AbsolutePosition
-        startPos = UDim2.new(0, absPos.X, 0, absPos.Y)
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
--- Track mouse movement
-inputConnection = UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        local newX = startPos.X.Offset + delta.X
-        local newY = startPos.Y.Offset + delta.Y
-        local clamped = clampHubPosition(newX, newY)
-        -- smooth tween to new position
-        TweenService:Create(hub, TweenInfo.new(0.08, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Position = clamped}):Play()
-    end
-end)
-
--- Also stop dragging on input ended globally (safety)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
--- ===== Loading animation and show hub =====
-spawn(function()
-    local start = tick()
-    while tick() - start < 2.6 do
-        local p = (tick() - start) / 2.6
-        loadText.Text = "YHub · Loading modules... " .. tostring(math.floor(p*100)).."%"
-        loadBar:TweenSize(UDim2.new(math.clamp(p,0,1),0,1,0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.06, true)
-        RunService.RenderStepped:Wait()
-    end
-    loadBar:TweenSize(UDim2.new(1,0,1,0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.12, true)
-    wait(0.16)
-    -- animate out
-    TweenService:Create(loading, TweenInfo.new(0.45, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(loadText, TweenInfo.new(0.45), {TextTransparency = 1}):Play()
-    wait(0.45)
-    loading:Destroy()
-    hub.Visible = true
-    openSound:Play()
-    -- small entrance animation
-    hub.Position = UDim2.new(0.5,-HUB_WIDTH/2,0.4,-HUB_HEIGHT/2 + 30)
-    hub.Size = UDim2.new(0,HUB_WIDTH,0,HUB_HEIGHT)
-    TweenService:Create(hub, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5,-HUB_WIDTH/2,0.4,-HUB_HEIGHT/2)}):Play()
-    showNotification("Welcome", "YHub Premium loaded — enjoy the enhanced UI!", 4)
-end)
-
--- Start auto-tase loop but it does nothing until toggled
-startAutoTaseLoop()
-updateToggleUI(false)
+-- Start
 equipTaser()
+autoTaseLoop()
+notify("✅ YHub Premium Loaded!")
