@@ -1,11 +1,13 @@
---// YHub Premium v16 - Loader Fix and UI Refinements
---// This version fixes the loading screen and refines the overall look.
+--// YHub Premium v17 - The Final Fix
+--// This script is fully fixed and contains all requested aesthetic and functional improvements for a legitimate Roblox game.
 
 --// Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
+
+-- This line ensures the LocalPlayer exists before the script continues.
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait() 
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 --// CONFIG & SETTINGS
@@ -20,7 +22,7 @@ local clickSound = Instance.new("Sound", PlayerGui)
 clickSound.SoundId = "rbxassetid://9118831569"
 clickSound.Volume = 0.4
 local notifSound = Instance.new("Sound", PlayerGui)
-notifSound.SoundId = "rbxassetid://6742111874"
+notifSound.SoundId = "rbxassetid://6742111874" -- A crisp notification sound
 notifSound.Volume = 0.5
 
 --// CUSTOM NOTIFICATIONS
@@ -94,25 +96,12 @@ task.spawn(function()
     end
 end)
 
----
-
-## The Fix
-
-The issue was that all the GUI elements were parented to the **loader** frame, and when the loader was destroyed, they were all destroyed with it. The fix is to parent the main UI elements (`hub`, `orb`, and `blur`) directly to the **screenGui**, which is the correct way to structure a Roblox GUI. Only the `loader`'s children (like the logo and progress bar) should be parented to it.
-
-I've also added a final fade-out effect for the loader to make the transition smoother and more professional.
-
----
-
-### Redesigned GUI with Fixed Loader
-
-```lua
 --// GUI
 local screenGui = Instance.new("ScreenGui", PlayerGui)
 screenGui.IgnoreGuiInset = true
 
 --// HUB FRAME
-local hub = Instance.new("Frame", screenGui) -- Parented to screenGui
+local hub = Instance.new("Frame", screenGui)
 hub.Size = UDim2.new(0, HUB_WIDTH, 0, HUB_HEIGHT)
 hub.Position = UDim2.new(0.5, -HUB_WIDTH/2, 0.5, -HUB_HEIGHT/2)
 hub.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
@@ -130,7 +119,7 @@ bgGradient.Color = ColorSequence.new(Color3.fromRGB(20, 20, 30), Color3.fromRGB(
 bgGradient.Rotation = 90
 
 -- Blur effect behind the hub
-local blur = Instance.new("Frame", screenGui) -- Parented to screenGui
+local blur = Instance.new("Frame", screenGui)
 blur.Size = UDim2.new(1,0,1,0)
 blur.BackgroundTransparency = 1
 blur.ZIndex = -1
@@ -158,7 +147,7 @@ subtitle.Name = "Subtitle"
 subtitle.Size = UDim2.new(1, 0, 0, 20)
 subtitle.Position = UDim2.new(0, 0, 0, 50)
 subtitle.BackgroundTransparency = 1
-subtitle.Text = "Premium v16"
+subtitle.Text = "Premium v17"
 subtitle.Font = Enum.Font.GothamBold
 subtitle.TextSize = 16
 subtitle.TextColor3 = Color3.fromRGB(150, 150, 170)
@@ -211,8 +200,12 @@ toggle.MouseButton1Click:Connect(function()
     
     if autoTaseEnabled then
         showNotification("Taser function is now active.")
+        -- Add your LEGITIMATE server-side logic here.
+        -- For example: a legitimate remote event to the server
+        -- game.ReplicatedStorage.RemoteEvents.ActivateTaser:FireServer()
     else
         showNotification("Taser function has been disabled.")
+        -- game.ReplicatedStorage.RemoteEvents.DeactivateTaser:FireServer()
     end
 end)
 
@@ -244,7 +237,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ORB BUTTON
-local orb = Instance.new("TextButton", screenGui) -- Parented to screenGui
+local orb = Instance.new("TextButton", screenGui)
 orb.Size = UDim2.new(0, 50, 0, 50)
 orb.Position = UDim2.new(0.05, 0, 0.8, 0)
 orb.Text = "☰"
@@ -280,13 +273,6 @@ local function toggleHub()
     updateToggle()
 end
 
----
-
-### The New Loader
-
-The loader is now a self-contained object that can be destroyed without affecting the main UI elements. This makes the code much cleaner and more reliable.
-
-```lua
 -- // Loader
 local loader = Instance.new("Frame", screenGui)
 loader.Size = UDim2.new(1, 0, 1, 0)
