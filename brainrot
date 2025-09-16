@@ -1,31 +1,11 @@
 --=============================================================
--- ⚡ YHub Premium v16 — Full Premium Dashboard + Themes + Persistence + Promo
--- Script Created by: YOUNG
+-- ⚡ YHub Premium — Full Fixed Edition
+-- Script Created by: YOUNG ⚡
+-- Version: v1 (fixed & upgraded)
+-- Place this as a LocalScript in StarterPlayerScripts
 --=============================================================
--- Place in StarterPlayerScripts (LocalScript)
--- Server persistence: create a RemoteEvent "YHub_SaveData" in ReplicatedStorage and implement server DataStore handling (example below).
 
--- Example server-side (ServerScriptService) DataStore snippet (OPTIONAL, required for cross-session persistence):
---[[
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local DataStoreService = game:GetService("DataStoreService")
-local SaveEvent = ReplicatedStorage:WaitForChild("YHub_SaveData") -- RemoteEvent
-
-local ds = DataStoreService:GetDataStore("YHubPremium_v1")
-
-SaveEvent.OnServerEvent:Connect(function(player, action, payload)
-    if action == "save" and type(payload) == "table" then
-        local key = "yhub_"..player.UserId
-        ds:SetAsync(key, payload)
-    elseif action == "load" then
-        local key = "yhub_"..player.UserId
-        local ok, dat = pcall(function() return ds:GetAsync(key) end)
-        SaveEvent:FireClient(player, "loaded", ok and dat or nil)
-    end
-end)
-]]
-
--- // CLIENT SCRIPT START
+-- Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -34,47 +14,43 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ================== CONFIG & STATE ==================
+-- ================== CONFIG ==================
 local TASER_NAME = "Taser Gun"
 local DEFAULT_RADIUS = 14
-local HUB_W, HUB_H = 460, 340
+local HUB_W, HUB_H = 520, 360
 
+-- Runtime state
 local autoTaseEnabled = false
 local auraPart, fovCircle
 local playersInRange = 0
+local autoTaseConnection = nil
 
--- Persistence remote (optional)
-local SaveEvent = ReplicatedStorage:FindFirstChild("YHub_SaveData") -- RemoteEvent expected on server
-local persistenceAvailable = (SaveEvent ~= nil)
-
--- Default persistent data
-local defaultData = {
-    theme = "Neon",      -- Dark | Neon | Sunset
-    radius = DEFAULT_RADIUS,
-    dockX = nil,
-    dockY = nil,
-}
-
--- cached loaded data
-local savedData = {}
-
--- ================== SOUNDS ==================
+-- ================== SOUNDS (safe defaults) ==================
 local function makeSound(parent, id, vol, name)
-    local s = Instance.new("Sound", parent)
-    s.Name = name or "YHubSound"
-    s.SoundId = "rbxassetid://"..tostring(id)
-    s.Volume = vol or 0.5
-    s.Looped = false
-    return s
+    local ok, s = pcall(function()
+        local snd = Instance.new("Sound", parent)
+        snd.Name = name or "YHubSound"
+        snd.SoundId = "rbxassetid://" .. tostring(id)
+        snd.Volume = vol or 0.45
+        snd.Looped = false
+        return snd
+    end)
+    return ok and s or nil
 end
 
-local soundFolder = Instance.new("Folder", PlayerGui); soundFolder.Name = "YHubSounds"
-local sHover  = makeSound(soundFolder, 9118825481, 0.22, "Hover")
-local sClick  = makeSound(soundFolder, 9118831569, 0.5,  "Click")
-local sOpen   = makeSound(soundFolder, 12221967,    0.6,  "Open")
-local sNotif  = makeSound(soundFolder, 9119136260, 0.6,  "Notif")
+local soundFolder = Instance.new("Folder", PlayerGui)
+soundFolder.Name = "YHubSounds"
 
--- ================== UTILITIES ==================
+local sHover = makeSound(soundFolder, 9118825481, 0.22, "Hover")
+local sClick = makeSound(soundFolder, 9118831569, 0.45, "Click")
+local sOpen  = makeSound(soundFolder, 12221967, 0.5, "Open")
+local sNotif = makeSound(soundFolder, 9119136260, 0.6, "Notif")
+
+local function safePlay(s)
+    pcall(function() if s then s:Play() end end)
+end
+
+-- ================== UTILS ==================
 local function equipTaser()
     local tool = ReplicatedStorage:FindFirstChild(TASER_NAME)
     if tool then
@@ -85,28 +61,30 @@ local function equipTaser()
     end
 end
 
--- Aura + FOV creation helpers
+-- ================== VISUAL EFFECTS (Aura & FOV) ==================
 local function createAura(radius)
+    radius = radius or LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS
     if auraPart then auraPart:Destroy() end
-    local r = radius or DEFAULT_RADIUS
-    local part = Instance.new("Part")
+    local part = Instance.new("Part", workspace)
     part.Name = "YHubAura"
-    part.Size = Vector3.new(r*2, r*2, r*2)
+    part.Size = Vector3.new(radius*2, radius*2, radius*2)
     part.Anchored = true
     part.CanCollide = false
     part.Material = Enum.Material.Neon
     part.Shape = Enum.PartType.Ball
     part.Transparency = 0.6
-    part.Parent = workspace
     auraPart = part
+
+    -- rainbow color loop
     spawn(function()
         local t = 0
         while auraPart and auraPart.Parent do
-            t = t + 0.008
-            auraPart.Color = Color3.fromHSV(t%1, 0.95, 0.95)
+            t = t + 0.009
+            auraPart.Color = Color3.fromHSV(t % 1, 0.95, 0.95)
             local char = LocalPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                auraPart.CFrame = char.HumanoidRootPart.CFrame
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                auraPart.CFrame = hrp.CFrame
             end
             RunService.RenderStepped:Wait()
         end
@@ -114,43 +92,44 @@ local function createAura(radius)
 end
 
 local function createFOV(radius)
+    radius = radius or LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS
     if fovCircle then fovCircle:Destroy() end
-    local r = radius or DEFAULT_RADIUS
-    local part = Instance.new("Part")
+    local part = Instance.new("Part", workspace)
     part.Name = "YHubFOV"
     part.Anchored = true
     part.CanCollide = false
-    part.Size = Vector3.new(r*2, 0.2, r*2)
+    part.Size = Vector3.new(radius*2, 0.2, radius*2)
     part.Material = Enum.Material.Neon
     part.Transparency = 0.55
     part.Shape = Enum.PartType.Cylinder
-    part.Parent = workspace
     fovCircle = part
+
     spawn(function()
         local t = 0
         while fovCircle and fovCircle.Parent do
-            t = t + 0.008
-            fovCircle.Color = Color3.fromHSV(t%1, 0.95, 0.95)
+            t = t + 0.009
+            fovCircle.Color = Color3.fromHSV(t % 1, 0.95, 0.95)
             local char = LocalPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                fovCircle.CFrame = CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,0.3,0)) * CFrame.Angles(math.rad(90),0,0)
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                fovCircle.CFrame = CFrame.new(hrp.Position + Vector3.new(0,0.3,0)) * CFrame.Angles(math.rad(90),0,0)
             end
             RunService.RenderStepped:Wait()
         end
     end)
 end
 
--- Auto-tase connection (single)
-local autoTaseConn
+-- ================== AUTO-TASE logic (single connection) ==================
 local function startAutoTase(radius)
-    if autoTaseConn then return end
-    autoTaseConn = RunService.RenderStepped:Connect(function()
+    if autoTaseConnection then return end
+    autoTaseConnection = RunService.RenderStepped:Connect(function()
         if not autoTaseEnabled then return end
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
-            if not auraPart then createAura(radius) end
-            if not fovCircle then createFOV(radius) end
+            local r = radius or LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS
+            if not auraPart then createAura(r) end
+            if not fovCircle then createFOV(r) end
             local taser = LocalPlayer.Backpack:FindFirstChild(TASER_NAME) or (char and char:FindFirstChild(TASER_NAME))
             if taser then
                 local count = 0
@@ -158,7 +137,7 @@ local function startAutoTase(radius)
                     if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
                         local otherHRP = pl.Character.HumanoidRootPart
                         local dist = (hrp.Position - otherHRP.Position).Magnitude
-                        if dist <= (radius or DEFAULT_RADIUS) then
+                        if dist <= r then
                             count = count + 1
                             pcall(function() taser:Activate() end)
                         end
@@ -171,76 +150,13 @@ local function startAutoTase(radius)
 end
 
 local function stopAutoTase()
-    if autoTaseConn then
-        autoTaseConn:Disconnect()
-        autoTaseConn = nil
+    if autoTaseConnection then
+        autoTaseConnection:Disconnect()
+        autoTaseConnection = nil
     end
-    if auraPart then auraPart:Destroy(); auraPart=nil end
-    if fovCircle then fovCircle:Destroy(); fovCircle=nil end
+    if auraPart then auraPart:Destroy(); auraPart = nil end
+    if fovCircle then fovCircle:Destroy(); fovCircle = nil end
     playersInRange = 0
-end
-
--- ================== PERSISTENCE HELPERS ==================
-local function requestServerLoad()
-    if not persistenceAvailable then return end
-    local ok,err = pcall(function()
-        SaveEvent:FireServer("load")
-    end)
-    if not ok then
-        warn("YHub: failed to request server load:", err)
-    end
-end
-
-local function requestServerSave(payload)
-    if not persistenceAvailable then return end
-    local ok,err = pcall(function()
-        SaveEvent:FireServer("save", payload)
-    end)
-    if not ok then warn("YHub: failed to request server save:", err) end
-end
-
--- if SaveEvent exists, listen for server replies
-if persistenceAvailable then
-    SaveEvent.OnClientEvent:Connect(function(action, data)
-        if action == "loaded" then
-            if data and type(data) == "table" then
-                savedData = data
-                print("YHub: loaded saved data from server.")
-            else
-                savedData = {}
-            end
-        end
-    end)
-end
-
--- local fallback save/load using player attributes (session-only)
-local function localSave(data)
-    if type(data.theme) == "string" then LocalPlayer:SetAttribute("YHub_Theme", data.theme) end
-    if type(data.radius) == "number" then LocalPlayer:SetAttribute("YHub_Radius", data.radius) end
-    if type(data.dockX) == "number" then LocalPlayer:SetAttribute("YHub_DockX", data.dockX) end
-    if type(data.dockY) == "number" then LocalPlayer:SetAttribute("YHub_DockY", data.dockY) end
-end
-
-local function localLoad()
-    local out = {}
-    out.theme = LocalPlayer:GetAttribute("YHub_Theme") or defaultData.theme
-    out.radius = LocalPlayer:GetAttribute("YHub_Radius") or defaultData.radius
-    out.dockX = LocalPlayer:GetAttribute("YHub_DockX")
-    out.dockY = LocalPlayer:GetAttribute("YHub_DockY")
-    return out
-end
-
--- try to initialize savedData: prefer server (if available) else local
-if persistenceAvailable then
-    requestServerLoad()
-    -- give server a short time to respond, fallback to local after 1s
-    delay(1, function()
-        if next(savedData) == nil then
-            savedData = localLoad()
-        end
-    end)
-else
-    savedData = localLoad()
 end
 
 -- ================== GUI BUILD ==================
@@ -250,69 +166,95 @@ gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.Parent = PlayerGui
 
--- Toasts
-local notifFolder = Instance.new("Folder", gui); notifFolder.Name = "Notifs"
-local function showToast(title, body, duration)
-    duration = duration or 3.5
-    local frame = Instance.new("Frame", notifFolder)
-    frame.Size = UDim2.new(0,320,0,76)
-    frame.Position = UDim2.new(1,-340,0.06,0)
-    frame.AnchorPoint = Vector2.new(1,0)
-    frame.BackgroundColor3 = Color3.fromRGB(20,20,26)
-    frame.BorderSizePixel = 0
-    local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color=Color3.fromRGB(80,180,255); stroke.Transparency=0.82
-
-    local titleLbl = Instance.new("TextLabel", frame)
-    titleLbl.Size = UDim2.new(1,-16,0,20); titleLbl.Position = UDim2.new(0,12,0,8)
-    titleLbl.BackgroundTransparency = 1; titleLbl.Font = Enum.Font.GothamBold; titleLbl.TextSize = 15
-    titleLbl.TextColor3 = Color3.fromRGB(240,240,255); titleLbl.Text = title
-
-    local bodyLbl = Instance.new("TextLabel", frame)
-    bodyLbl.Size = UDim2.new(1,-16,0,36); bodyLbl.Position = UDim2.new(0,12,0,30)
-    bodyLbl.BackgroundTransparency = 1; bodyLbl.Font = Enum.Font.Gotham; bodyLbl.TextSize = 13
-    bodyLbl.TextColor3 = Color3.fromRGB(190,190,210); bodyLbl.TextWrapped = true; bodyLbl.Text = body
-
-    TweenService:Create(frame, TweenInfo.new(0.36, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(1,-16,0.06,0)}):Play()
-    pcall(function() sNotif:Play() end)
-    delay(duration, function()
-        TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1,-340,0.06,0)}):Play()
-        wait(0.33)
-        frame:Destroy()
-    end)
+-- Helper: create rounded frame
+local function roundedFrame(parent, size, pos, bg)
+    local f = Instance.new("Frame", parent)
+    f.Size = size
+    f.Position = pos
+    f.BackgroundColor3 = bg or Color3.fromRGB(18,18,24)
+    f.BorderSizePixel = 0
+    local c = Instance.new("UICorner", f); c.CornerRadius = UDim.new(0,12)
+    return f
 end
 
--- Dock orb (floating, draggable)
-local dock = Instance.new("TextButton", gui)
-dock.Name = "YHubDock"
-dock.Size = UDim2.new(0,62,0,62)
--- restore position from savedData or attributes
-local savedX = savedData.dockX or LocalPlayer:GetAttribute("YHub_DockX")
-local savedY = savedData.dockY or LocalPlayer:GetAttribute("YHub_DockY")
-if savedX and savedY then
-    dock.Position = UDim2.new(0, savedX, 0, savedY)
-else
-    dock.Position = UDim2.new(0.06, 0, 0.8, 0)
-end
-dock.AnchorPoint = Vector2.new(0.5,0.5)
-dock.BackgroundColor3 = Color3.fromRGB(18,18,24)
-dock.AutoButtonColor = false
-dock.Text = "⚡"
-dock.Font = Enum.Font.GothamBold
-dock.TextSize = 28
-dock.TextColor3 = Color3.fromRGB(230,230,255)
-local dockCorner = Instance.new("UICorner", dock); dockCorner.CornerRadius = UDim.new(1,0)
-local dockStroke = Instance.new("UIStroke", dock); dockStroke.Thickness = 2; dockStroke.Color = Color3.fromRGB(80,200,255)
+-- ---------- Loading screen (glass + italic glowing text) ----------
+local loading = Instance.new("Frame", gui)
+loading.Name = "YHubLoading"
+loading.Size = UDim2.new(1,0,1,0)
+loading.Position = UDim2.new(0,0,0,0)
+loading.BackgroundColor3 = Color3.fromRGB(12,12,20)
+local loadingGrad = Instance.new("UIGradient", loading)
+loadingGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(8,8,14)), ColorSequenceKeypoint.new(1, Color3.fromRGB(20,8,30))})
+loadingGrad.Rotation = 90
+
+local glowText = Instance.new("TextLabel", loading)
+glowText.AnchorPoint = Vector2.new(0.5,0.5)
+glowText.Position = UDim2.new(0.5,0,0.38,0)
+glowText.Size = UDim2.new(0.8,0,0.12,0)
+glowText.BackgroundTransparency = 1
+glowText.Font = Enum.Font.GothamItalic
+glowText.TextSize = 34
+glowText.TextColor3 = Color3.fromRGB(200,200,255)
+glowText.Text = "𝑌𝐻𝑢𝑏 𝑃𝑟𝑒𝑚𝑖𝑢𝑚 · Loading..."
+
+-- progress bar
+local barBG = Instance.new("Frame", loading)
+barBG.Size = UDim2.new(0.56,0,0.05,0)
+barBG.Position = UDim2.new(0.22,0,0.62,0)
+barBG.BackgroundColor3 = Color3.fromRGB(36,36,48)
+barBG.BorderSizePixel = 0
+local barCorner = Instance.new("UICorner", barBG); barCorner.CornerRadius = UDim.new(0,14)
+
+local barFill = Instance.new("Frame", barBG)
+barFill.Size = UDim2.new(0,0,1,0)
+barFill.BackgroundColor3 = Color3.fromRGB(80,200,255)
+local barFillCorner = Instance.new("UICorner", barFill); barFillCorner.CornerRadius = UDim.new(0,14)
+
 spawn(function()
-    local t=0
-    while dock.Parent do
+    -- glowing text color loop
+    local t = 0
+    while loading and loading.Parent do
         t = t + 0.01
-        dockStroke.Color = Color3.fromHSV((t*0.06)%1, 0.9, 0.95)
+        glowText.TextColor3 = Color3.fromHSV(t%1, 0.85, 1)
         RunService.RenderStepped:Wait()
     end
 end)
 
--- drag logic & save on release
+-- ---------- Dock orb (draggable) ----------
+local dock = Instance.new("ImageButton", gui)
+dock.Name = "YHubDock"
+dock.Size = UDim2.new(0,64,0,64)
+-- try read saved position from player attributes (session)
+local savedX = LocalPlayer:GetAttribute("YHub_DockX")
+local savedY = LocalPlayer:GetAttribute("YHub_DockY")
+if savedX and savedY then
+    dock.Position = UDim2.new(0, savedX, 0, savedY)
+else
+    dock.Position = UDim2.new(0.06, 0, 0.78, 0)
+end
+dock.AnchorPoint = Vector2.new(0.5,0.5)
+dock.BackgroundTransparency = 1
+dock.Image = "" -- keep blank so it looks like flat orb; replace if you want texture
+dock.AutoButtonColor = false
+local dockBg = Instance.new("Frame", dock)
+dockBg.Size = UDim2.new(1,0,1,0); dockBg.Position = UDim2.new(0,0,0,0)
+dockBg.BorderSizePixel = 0; dockBg.BackgroundColor3 = Color3.fromRGB(24,24,34)
+local dockCorner = Instance.new("UICorner", dockBg); dockCorner.CornerRadius = UDim.new(1,0)
+local dockStroke = Instance.new("UIStroke", dockBg); dockStroke.Thickness = 2; dockStroke.Color = Color3.fromRGB(80,200,255)
+local dockLabel = Instance.new("TextLabel", dock)
+dockLabel.Size = UDim2.new(1,0,1,0); dockLabel.BackgroundTransparency = 1; dockLabel.Text = "⚡"; dockLabel.Font = Enum.Font.GothamBold; dockLabel.TextSize = 28; dockLabel.TextColor3 = Color3.fromRGB(240,240,255)
+
+-- dock stroke color animate
+spawn(function()
+    local t = 0
+    while dock and dock.Parent do
+        t = t + 0.01
+        dockStroke.Color = Color3.fromHSV((t*0.05) % 1, 0.9, 0.95)
+        RunService.RenderStepped:Wait()
+    end
+end)
+
+-- dock dragging
 local draggingDock = false
 local dockDragStart, dockStartPos, dockInput
 dock.InputBegan:Connect(function(input)
@@ -323,16 +265,10 @@ dock.InputBegan:Connect(function(input)
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 draggingDock = false
+                -- save position to attributes
                 local abs = dock.AbsolutePosition
-                local payload = {dockX = math.floor(abs.X), dockY = math.floor(abs.Y)}
-                -- local save
-                LocalPlayer:SetAttribute("YHub_DockX", payload.dockX)
-                LocalPlayer:SetAttribute("YHub_DockY", payload.dockY)
-                -- attempt server save
-                if persistenceAvailable then
-                    local toSave = { theme = savedData.theme or defaultData.theme, radius = savedData.radius or defaultData.radius, dockX = payload.dockX, dockY = payload.dockY }
-                    requestServerSave(toSave)
-                end
+                LocalPlayer:SetAttribute("YHub_DockX", math.floor(abs.X))
+                LocalPlayer:SetAttribute("YHub_DockY", math.floor(abs.Y))
             end
         end)
     end
@@ -341,81 +277,83 @@ dock.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInp
 RunService.RenderStepped:Connect(function()
     if draggingDock and dockInput then
         local delta = dockInput.Position - dockDragStart
-        local newPos = UDim2.new(dockStartPos.X.Scale, dockStartPos.X.Offset + delta.X, dockStartPos.Y.Scale, dockStartPos.Y.Offset + delta.Y)
-        -- clamp
+        local newX = dockStartPos.X.Offset + delta.X
+        local newY = dockStartPos.Y.Offset + delta.Y
         local cam = workspace.CurrentCamera
         local vw, vh = (cam and cam.ViewportSize.X) or 1280, (cam and cam.ViewportSize.Y) or 720
-        local nx = math.clamp(newPos.X.Offset, 8, vw-64)
-        local ny = math.clamp(newPos.Y.Offset, 8, vh-64)
-        dock.Position = UDim2.new(0, nx, 0, ny)
+        newX = math.clamp(newX, 8, vw - 72)
+        newY = math.clamp(newY, 8, vh - 72)
+        dock.Position = UDim2.new(0, newX, 0, newY)
     end
 end)
 
--- Main Hub (glass-like)
+-- ---------- Hub (glass panel with sidebar tabs) ----------
 local hub = Instance.new("Frame", gui)
-hub.Name = "YHubMain"
+hub.Name = "YHubHub"
 hub.Size = UDim2.new(0, HUB_W, 0, HUB_H)
-hub.Position = UDim2.new(-1, 0, 0.12, 0)
-hub.BackgroundColor3 = Color3.fromRGB(14,14,20)
-hub.BackgroundTransparency = 0.04
+hub.Position = UDim2.new(-1, 0, 0.12, 0) -- hidden left by default
+hub.BackgroundColor3 = Color3.fromRGB(16,16,22)
+hub.BackgroundTransparency = 0.03
 hub.BorderSizePixel = 0
 hub.Visible = false
 local hubCorner = Instance.new("UICorner", hub); hubCorner.CornerRadius = UDim.new(0,16)
-local hubStroke = Instance.new("UIStroke", hub); hubStroke.Thickness = 2; hubStroke.Transparency = 0.7
+local hubStroke = Instance.new("UIStroke", hub); hubStroke.Thickness = 2; hubStroke.Color = Color3.fromRGB(80,200,255); hubStroke.Transparency = 0.72
 
--- Left Sidebar w/ icons & tabs
+-- watermark / credits
+local watermark = Instance.new("TextLabel", gui)
+watermark.AnchorPoint = Vector2.new(1,1)
+watermark.Position = UDim2.new(1, -12, 1, -8)
+watermark.Size = UDim2.new(0, 240, 0, 22)
+watermark.BackgroundTransparency = 1
+watermark.Font = Enum.Font.GothamItalic
+watermark.TextSize = 14
+watermark.TextColor3 = Color3.fromRGB(160,160,220)
+watermark.Text = "YHub Premium | by YOUNG ⚡"
+
+-- sidebar
 local sidebar = Instance.new("Frame", hub)
-sidebar.Size = UDim2.new(0, 140, 1, 0)
+sidebar.Size = UDim2.new(0, 150, 1, 0)
 sidebar.Position = UDim2.new(0,0,0,0)
 sidebar.BackgroundTransparency = 1
 
-local function iconLabel(parent, emoji)
-    local lbl = Instance.new("TextLabel", parent)
-    lbl.Size = UDim2.new(0,28,0,28)
+local function makeTab(buttonY, emoji, name)
+    local b = Instance.new("TextButton", sidebar)
+    b.Size = UDim2.new(1, -24, 0, 44)
+    b.Position = UDim2.new(0, 12, 0, buttonY)
+    b.BackgroundColor3 = Color3.fromRGB(24,24,32)
+    b.AutoButtonColor = false
+    b.Text = ""
+    local corner = Instance.new("UICorner", b); corner.CornerRadius = UDim.new(0,8)
+    local stroke = Instance.new("UIStroke", b); stroke.Thickness = 1; stroke.Color = Color3.fromRGB(80,160,255); stroke.Transparency = 0.9
+
+    local ic = Instance.new("TextLabel", b)
+    ic.Size = UDim2.new(0,30,0,30); ic.Position = UDim2.new(0,8,0,7)
+    ic.BackgroundTransparency = 1; ic.Font = Enum.Font.GothamBold; ic.TextSize = 18; ic.Text = emoji
+
+    local lbl = Instance.new("TextLabel", b)
+    lbl.Size = UDim2.new(1, -56, 1, 0)
+    lbl.Position = UDim2.new(0,46,0,0)
     lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 18
-    lbl.Text = emoji
-    return lbl
+    lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 14; lbl.Text = name; lbl.TextColor3 = Color3.fromRGB(230,230,255); lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    return b
 end
 
-local tabButtons = {}
-local function makeTab(name, emoji, y)
-    local btn = Instance.new("TextButton", sidebar)
-    btn.Size = UDim2.new(1, -18, 0, 44)
-    btn.Position = UDim2.new(0,9,0,y)
-    btn.BackgroundColor3 = Color3.fromRGB(26,26,32)
-    btn.Text = ""
-    btn.AutoButtonColor = false
-    local corner = Instance.new("UICorner", btn); corner.CornerRadius = UDim.new(0,8)
-    local stroke = Instance.new("UIStroke", btn); stroke.Color = Color3.fromRGB(80,160,255); stroke.Transparency = 0.92; stroke.Thickness = 1
+local tabHome = makeTab(12, "🏠", "Home")
+local tabAuto = makeTab(68, "⚡", "Auto-Tase")
+local tabSet  = makeTab(124, "🎨", "Settings")
+local tabCred = makeTab(180, "👑", "Credits")
 
-    local ic = iconLabel(btn, emoji)
-    ic.Position = UDim2.new(0,8,0,8)
-    local label = Instance.new("TextLabel", btn)
-    label.Size = UDim2.new(1, -48, 1, 0)
-    label.Position = UDim2.new(0,40,0,0)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamBold; label.TextSize = 14; label.TextColor3 = Color3.fromRGB(230,230,255); label.Text = name; label.TextXAlignment = Enum.TextXAlignment.Left
-
-    tabButtons[name] = btn
-    return btn
-end
-
-local btnHome = makeTab("Home", "🏠", 8)
-local btnAuto = makeTab("Auto-Tase", "🔫", 60)
-local btnSet  = makeTab("Settings", "⚙️", 112)
-local btnCred = makeTab("Credits", "👑", 164)
-
--- Content area
+-- content area
 local content = Instance.new("Frame", hub)
-content.Size = UDim2.new(1, -140, 1, -24)
-content.Position = UDim2.new(0,140,0,12)
+content.Size = UDim2.new(1, -150, 1, -24)
+content.Position = UDim2.new(0,150,0,12)
 content.BackgroundTransparency = 1
 
 local pages = {}
 local function newPage(name)
     local p = Instance.new("Frame", content)
+    p.Name = "Page_" .. name
     p.Size = UDim2.new(1,0,1,0)
     p.BackgroundTransparency = 1
     p.Visible = false
@@ -423,7 +361,7 @@ local function newPage(name)
     return p
 end
 
--- Home page
+-- --- Home page ---
 local home = newPage("Home")
 local homeTitle = Instance.new("TextLabel", home)
 homeTitle.Size = UDim2.new(1, -24, 0, 28); homeTitle.Position = UDim2.new(0,12,0,0)
@@ -431,57 +369,59 @@ homeTitle.BackgroundTransparency = 1; homeTitle.Font = Enum.Font.GothamBold; hom
 homeTitle.Text = "Welcome — YHub Premium"; homeTitle.TextColor3 = Color3.fromRGB(240,240,255); homeTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local homeBody = Instance.new("TextLabel", home)
-homeBody.Size = UDim2.new(1, -24, 0, 92); homeBody.Position = UDim2.new(0,12,0,34)
+homeBody.Size = UDim2.new(1, -24, 0, 110); homeBody.Position = UDim2.new(0,12,0,36)
 homeBody.BackgroundTransparency = 1; homeBody.Font = Enum.Font.Gotham; homeBody.TextSize = 14
 homeBody.TextColor3 = Color3.fromRGB(200,200,220); homeBody.TextWrapped = true
-homeBody.Text = "Dashboard-style hub with themes, persistence, animated tabs, promo export, and auto-tase features. Customize settings, enable auto-tase, and show credits. Built by YOUNG."
+homeBody.Text = "Ultra dashboard interface with glass look, animated toggles, theme presets, and auto-tase features. Use the Auto-Tase tab to enable automated taser firing within the radius."
 
 local liveStat = Instance.new("TextLabel", home)
-liveStat.Size = UDim2.new(1, -24, 0, 22); liveStat.Position = UDim2.new(0,12,0,138)
+liveStat.Size = UDim2.new(1, -24, 0, 22); liveStat.Position = UDim2.new(0,12,0,150)
 liveStat.BackgroundTransparency = 1; liveStat.Font = Enum.Font.GothamSemibold; liveStat.TextSize = 14
-liveStat.TextColor3 = Color3.fromRGB(180,255,255); liveStat.Text = "Players in range: 0"
+liveStat.TextColor3 = Color3.fromRGB(170,255,255); liveStat.Text = "Players in range: 0"
 
--- Auto page
+-- --- Auto page ---
 local autoPage = newPage("Auto-Tase")
 local autoTitle = Instance.new("TextLabel", autoPage)
 autoTitle.Size = UDim2.new(1,-24,0,28); autoTitle.Position = UDim2.new(0,12,0,0)
 autoTitle.BackgroundTransparency = 1; autoTitle.Font = Enum.Font.GothamBold; autoTitle.TextSize = 18
-autoTitle.TextColor3 = Color3.fromRGB(240,240,255); autoTitle.Text = "Auto-Tase"
+autoTitle.TextColor3 = Color3.fromRGB(240,240,255); autoTitle.Text = "Auto-Tase Controls"
 
--- Animated iOS-like switch helper
-local function makeSwitch(parent, labelTxt, initial)
+-- animated switch helper
+local function makeSwitch(parent, labelText, initial)
     local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1,-24,0,52)
+    container.Size = UDim2.new(1,-24,0,56)
     container.Position = UDim2.new(0,12,0,40 + (#parent:GetChildren()*0))
     container.BackgroundTransparency = 1
 
     local lbl = Instance.new("TextLabel", container)
-    lbl.Size = UDim2.new(0.65,0,1,0)
-    lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 14; lbl.Text = labelTxt
-    lbl.TextColor3 = Color3.fromRGB(220,220,235)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Size = UDim2.new(0.68,0,1,0); lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 14
+    lbl.Text = labelText; lbl.TextColor3 = Color3.fromRGB(220,220,235); lbl.TextXAlignment = Enum.TextXAlignment.Left
 
-    local swBg = Instance.new("TextButton", container)
-    swBg.Size = UDim2.new(0,64,0,36)
-    swBg.AnchorPoint = Vector2.new(1,0.5)
-    swBg.Position = UDim2.new(1,-12,0.5,0)
-    swBg.BackgroundColor3 = Color3.fromRGB(42,42,52)
-    swBg.AutoButtonColor = false
-    local swCorner = Instance.new("UICorner", swBg); swCorner.CornerRadius = UDim.new(0,18)
-    local swFill = Instance.new("Frame", swBg)
-    swFill.Size = initial and UDim2.new(0,36,1,0) or UDim2.new(0,8,1,0)
-    swFill.Position = initial and UDim2.new(1,-36,0,0) or UDim2.new(0,0,0,0)
-    swFill.BackgroundColor3 = initial and Color3.fromRGB(80,200,255) or Color3.fromRGB(160,160,170)
-    local swCorner2 = Instance.new("UICorner", swFill); swCorner2.CornerRadius = UDim.new(0,16)
+    local sw = Instance.new("TextButton", container)
+    sw.Size = UDim2.new(0,72,0,36)
+    sw.AnchorPoint = Vector2.new(1,0.5)
+    sw.Position = UDim2.new(1, -12, 0.5, 0)
+    sw.BackgroundColor3 = Color3.fromRGB(40,40,52)
+    sw.AutoButtonColor = false
+    local swCorner = Instance.new("UICorner", sw); swCorner.CornerRadius = UDim.new(0,18)
+    local fill = Instance.new("Frame", sw)
+    fill.Size = initial and UDim2.new(0,38,1,0) or UDim2.new(0,8,1,0)
+    fill.Position = initial and UDim2.new(1,-38,0,0) or UDim2.new(0,0,0,0)
+    fill.BackgroundColor3 = initial and Color3.fromRGB(80,200,255) or Color3.fromRGB(160,160,170)
+    local fillCorner = Instance.new("UICorner", fill); fillCorner.CornerRadius = UDim.new(0,16)
 
-    return {Container = container, Button = swBg, Fill = swFill, Set = function(state)
-        if state then
-            TweenService:Create(swFill, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {Size = UDim2.new(0,36,1,0), Position = UDim2.new(1,-36,0,0), BackgroundColor3 = Color3.fromRGB(80,200,255)}):Play()
-        else
-            TweenService:Create(swFill, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {Size = UDim2.new(0,8,1,0), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.fromRGB(160,160,170)}):Play()
+    return {
+        Container = container,
+        Button = sw,
+        Fill = fill,
+        Set = function(state)
+            if state then
+                TweenService:Create(fill, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {Size = UDim2.new(0,38,1,0), Position = UDim2.new(1,-38,0,0), BackgroundColor3 = Color3.fromRGB(80,200,255)}):Play()
+            else
+                TweenService:Create(fill, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {Size = UDim2.new(0,8,1,0), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.fromRGB(160,160,170)}):Play()
+            end
         end
-    end}
+    }
 end
 
 local autoSwitch = makeSwitch(autoPage, "Enable Auto-Tase", false)
@@ -489,13 +429,13 @@ autoSwitch.Button.MouseButton1Click:Connect(function()
     autoTaseEnabled = not autoTaseEnabled
     autoSwitch.Set(autoTaseEnabled)
     if autoTaseEnabled then
-        startAutoTase(savedData.radius or LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS)
-        showToast("Auto-Tase", "Auto-Tase is ENABLED", 2.5)
+        startAutoTase(LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS)
+        showToast = showToast or function() end -- ensure exists (filled later)
+        -- showToast will be defined below; safe call here
     else
         stopAutoTase()
-        showToast("Auto-Tase", "Auto-Tase is DISABLED", 2.5)
     end
-    pcall(function() sClick:Play() end)
+    safePlay(sClick)
 end)
 
 local equipBtn = Instance.new("TextButton", autoPage)
@@ -507,156 +447,103 @@ equipBtn.TextColor3 = Color3.fromRGB(235,235,245)
 local equipCorner = Instance.new("UICorner", equipBtn); equipCorner.CornerRadius = UDim.new(0,8)
 equipBtn.MouseButton1Click:Connect(function()
     equipTaser()
-    showToast("Taser", "Taser equipped to backpack", 2.2)
-    pcall(function() sClick:Play() end)
+    safePlay(sClick)
+    -- toast defined further down; call later
 end)
 
--- Settings page (themes + radius slider + save/load)
+-- --- Settings page ---
 local setPage = newPage("Settings")
 local setTitle = Instance.new("TextLabel", setPage)
 setTitle.Size = UDim2.new(1,-24,0,28); setTitle.Position = UDim2.new(0,12,0,0)
 setTitle.BackgroundTransparency = 1; setTitle.Font = Enum.Font.GothamBold; setTitle.TextSize = 18
 setTitle.TextColor3 = Color3.fromRGB(240,240,255); setTitle.Text = "Settings"
 
--- Theme presets
-local themeLabel = Instance.new("TextLabel", setPage)
-themeLabel.Size = UDim2.new(1,-24,0,20); themeLabel.Position = UDim2.new(0,12,0,44)
-themeLabel.BackgroundTransparency = 1; themeLabel.Font = Enum.Font.Gotham; themeLabel.TextSize = 13
-themeLabel.TextColor3 = Color3.fromRGB(200,200,220); themeLabel.Text = "Theme Presets"
-
-local themeButtons = {}
+-- Themes
 local themes = {
-    Dark = {
-        bg = Color3.fromRGB(14,14,20),
-        panel = Color3.fromRGB(20,20,26),
-        accent = Color3.fromRGB(120,120,220),
-    },
-    Neon = {
-        bg = Color3.fromRGB(8,8,12),
-        panel = Color3.fromRGB(18,18,26),
-        accent = Color3.fromRGB(80,200,255),
-    },
-    Sunset = {
-        bg = Color3.fromRGB(28,12,8),
-        panel = Color3.fromRGB(40,18,12),
-        accent = Color3.fromRGB(255,140,80),
-    }
+    Neon = { bg = Color3.fromRGB(12,12,18), panel = Color3.fromRGB(18,18,26), accent = Color3.fromRGB(80,200,255) },
+    Dark  = { bg = Color3.fromRGB(14,14,18), panel = Color3.fromRGB(22,22,28), accent = Color3.fromRGB(120,120,220) },
+    Sunset= { bg = Color3.fromRGB(32,12,10), panel = Color3.fromRGB(44,20,16), accent = Color3.fromRGB(255,140,80) }
 }
 
-local themeY = 72
-for name,_ in pairs(themes) do
-    local b = Instance.new("TextButton", setPage)
-    b.Size = UDim2.new(0,96,0,32)
-    b.Position = UDim2.new(0, 12 + (themeY - 72), 0, themeY)
-    b.BackgroundColor3 = Color3.fromRGB(36,36,46)
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 14
-    b.Text = name
-    b.Name = "Theme_"..name
-    local c = Instance.new("UICorner", b); c.CornerRadius = UDim.new(0,8)
-    themeY = themeY + 40
-    themeButtons[name] = b
-end
-
--- apply theme function
 local function applyTheme(name)
     local t = themes[name] or themes.Neon
     hub.BackgroundColor3 = t.bg
-    for i,v in ipairs({hubStroke,}) do
-        hubStroke.Color = t.accent
-    end
-    -- recolor sidebar buttons and content text
-    for _,btn in pairs(tabButtons) do
-        btn.BackgroundColor3 = Color3.fromRGB(26,26,32)
-        local stroke = btn:FindFirstChildOfClass("UIStroke")
+    hubStroke.Color = t.accent
+    -- recolor sidebar buttons strokes
+    for _,btn in pairs({tabHome,tabAuto,tabSet,tabCred}) do
+        local stroke = btn:FindFirstChildWhichIsA("UIStroke")
         if stroke then stroke.Color = t.accent end
     end
-    -- recolor global text (basic)
-    for _,lbl in pairs(gui:GetDescendants()) do
-        if lbl:IsA("TextLabel") or lbl:IsA("TextButton") then
-            -- don't override content-specific colors; keep a subtle rule: titles remain near-white
-        end
-    end
-    savedData.theme = name
-    -- save locally & attempt server save
-    local payload = { theme = savedData.theme, radius = savedData.radius or DEFAULT_RADIUS, dockX = LocalPlayer:GetAttribute("YHub_DockX"), dockY = LocalPlayer:GetAttribute("YHub_DockY") }
-    localSave(payload)
-    if persistenceAvailable then requestServerSave(payload) end
+    watermark.TextColor3 = t.accent:lerp(Color3.fromRGB(200,200,220), 0.3)
+    -- save theme attribute
+    LocalPlayer:SetAttribute("YHub_Theme", name)
 end
 
-for name, btn in pairs(themeButtons) do
-    btn.MouseButton1Click:Connect(function()
-        pcall(function() sClick:Play() end)
+-- Theme buttons
+local themeLabel = Instance.new("TextLabel", setPage)
+themeLabel.Size = UDim2.new(1,-24,0,18); themeLabel.Position = UDim2.new(0,12,0,44)
+themeLabel.BackgroundTransparency = 1; themeLabel.Font = Enum.Font.Gotham; themeLabel.TextSize = 13
+themeLabel.TextColor3 = Color3.fromRGB(200,200,220); themeLabel.Text = "Theme Presets"
+
+local xOff = 12
+for name,_ in pairs(themes) do
+    local b = Instance.new("TextButton", setPage)
+    b.Size = UDim2.new(0,100,0,32)
+    b.Position = UDim2.new(0, xOff, 0, 68)
+    b.BackgroundColor3 = Color3.fromRGB(36,36,46)
+    b.Font = Enum.Font.GothamBold; b.TextSize = 14; b.Text = name
+    local c = Instance.new("UICorner", b); c.CornerRadius = UDim.new(0,8)
+    b.MouseButton1Click:Connect(function()
         applyTheme(name)
-        showToast("Theme", "Applied theme: "..name, 2.2)
+        safePlay(sClick)
     end)
+    xOff = xOff + 110
 end
 
--- Radius slider (live)
+-- Radius slider
 local radiusLabel = Instance.new("TextLabel", setPage)
-radiusLabel.Size = UDim2.new(1,-24,0,18)
-radiusLabel.Position = UDim2.new(0,12,0,220)
-radiusLabel.BackgroundTransparency = 1
-radiusLabel.Font = Enum.Font.Gotham; radiusLabel.TextSize = 13
+radiusLabel.Size = UDim2.new(1,-24,0,18); radiusLabel.Position = UDim2.new(0,12,0,120)
+radiusLabel.BackgroundTransparency = 1; radiusLabel.Font = Enum.Font.Gotham; radiusLabel.TextSize = 13
 radiusLabel.TextColor3 = Color3.fromRGB(200,200,220)
-radiusLabel.Text = "Aura / Auto-Tase Radius: "..tostring(defaultData.radius)
-
 local sliderBG = Instance.new("Frame", setPage)
-sliderBG.Size = UDim2.new(1,-48,0,18)
-sliderBG.Position = UDim2.new(0,24,0,246)
-sliderBG.BackgroundColor3 = Color3.fromRGB(40,40,52)
+sliderBG.Size = UDim2.new(1,-48,0,18); sliderBG.Position = UDim2.new(0,24,0,146); sliderBG.BackgroundColor3 = Color3.fromRGB(40,40,52)
 local sliderCorner = Instance.new("UICorner", sliderBG); sliderCorner.CornerRadius = UDim.new(0,8)
-local sliderFill = Instance.new("Frame", sliderBG)
-sliderFill.Size = UDim2.new(0.25,0,1,0)
-sliderFill.BackgroundColor3 = Color3.fromRGB(80,200,255)
+local sliderFill = Instance.new("Frame", sliderBG); sliderFill.Size = UDim2.new(0.25,0,1,0); sliderFill.BackgroundColor3 = Color3.fromRGB(80,200,255)
 local fillCorner = Instance.new("UICorner", sliderFill); fillCorner.CornerRadius = UDim.new(0,8)
-local handle = Instance.new("TextButton", sliderBG)
-handle.Size = UDim2.new(0,16,0,16)
-handle.Position = UDim2.new(0.25, -8, 0.5, -8)
-handle.BackgroundColor3 = Color3.fromRGB(230,230,255)
-handle.AutoButtonColor = false
-handle.Text = ""
+local handle = Instance.new("TextButton", sliderBG); handle.Size = UDim2.new(0,16,0,16); handle.Position = UDim2.new(0.25, -8, 0.5, -8); handle.BackgroundColor3 = Color3.fromRGB(240,240,245); handle.Text = ""; handle.AutoButtonColor = false
 local draggingHandle = false
+
 local function setRadiusFromPercent(p)
-    p = math.clamp(p, 0, 1)
+    p = math.clamp(p,0,1)
     sliderFill.Size = UDim2.new(p,0,1,0)
     handle.Position = UDim2.new(p, -8, 0.5, -8)
-    local r = math.floor(6 + p * 54) -- 6..60
-    radiusLabel.Text = "Aura / Auto-Tase Radius: "..tostring(r)
-    savedData.radius = r
+    local r = math.floor(6 + p * 54) -- => 6..60
+    radiusLabel.Text = "Aura / Auto-Tase Radius: " .. tostring(r)
     LocalPlayer:SetAttribute("YHub_Radius", r)
     if auraPart then auraPart.Size = Vector3.new(r*2,r*2,r*2) end
     if fovCircle then fovCircle.Size = Vector3.new(r*2,0.2,r*2) end
-    -- attempt server save
-    if persistenceAvailable then
-        local payload = { theme = savedData.theme or defaultData.theme, radius = r, dockX = LocalPlayer:GetAttribute("YHub_DockX"), dockY = LocalPlayer:GetAttribute("YHub_DockY") }
-        requestServerSave(payload)
-    else
-        localSave({ theme = savedData.theme or defaultData.theme, radius = r })
-    end
 end
 
 handle.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         draggingHandle = true
         input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then draggingHandle = false end end)
     end
 end)
 RunService.RenderStepped:Connect(function()
     if draggingHandle then
-        local abs = UserInputService:GetMouseLocation()
-        local relativeX = math.clamp(abs.X - sliderBG.AbsolutePosition.X, 0, sliderBG.AbsoluteSize.X)
-        local p = relativeX / sliderBG.AbsoluteSize.X
-        setRadiusFromPercent(p)
+        local mx = UserInputService:GetMouseLocation().X
+        local rel = math.clamp(mx - sliderBG.AbsolutePosition.X, 0, sliderBG.AbsoluteSize.X)
+        setRadiusFromPercent(rel / sliderBG.AbsoluteSize.X)
     end
 end)
 
--- initialize slider from saved or default
-local initR = savedData.radius or LocalPlayer:GetAttribute("YHub_Radius") or defaultData.radius
-local initP = (initR - 6)/54
-setRadiusFromPercent(math.clamp(initP,0,1))
+-- initialize slider
+local initR = LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS
+local pInit = (initR - 6) / 54
+setRadiusFromPercent(math.clamp(pInit,0,1))
 
--- Credits page + promo modal
+-- --- Credits page ---
 local credPage = newPage("Credits")
 local credTitle = Instance.new("TextLabel", credPage)
 credTitle.Size = UDim2.new(1,-24,0,28); credTitle.Position = UDim2.new(0,12,0,0)
@@ -664,102 +551,85 @@ credTitle.BackgroundTransparency = 1; credTitle.Font = Enum.Font.GothamBold; cre
 credTitle.TextColor3 = Color3.fromRGB(240,240,255); credTitle.Text = "Credits"
 
 local credBody = Instance.new("TextLabel", credPage)
-credBody.Size = UDim2.new(1,-24,0,140); credBody.Position = UDim2.new(0,12,0,34)
+credBody.Size = UDim2.new(1,-24,0,140); credBody.Position = UDim2.new(0,12,0,36)
 credBody.BackgroundTransparency = 1; credBody.Font = Enum.Font.GothamItalic; credBody.TextSize = 14
 credBody.TextColor3 = Color3.fromRGB(200,200,220)
-credBody.Text = "Made with ⚡ by YOUNG\n\nContact for premium themes, skins, and custom builds."
+credBody.Text = "Made with ⚡ by YOUNG\n\nThanks for using YHub Premium. Contact YOUNG for custom themes and premium builds."
 
-local promoBtn = Instance.new("TextButton", credPage)
-promoBtn.Size = UDim2.new(0.6,0,0,36)
-promoBtn.Position = UDim2.new(0.2,0,0,180)
-promoBtn.BackgroundColor3 = Color3.fromRGB(50,50,68)
-promoBtn.Font = Enum.Font.GothamBold; promoBtn.TextSize = 14; promoBtn.Text = "Export Promo (screenshot-friendly)"
-local promoCorner = Instance.new("UICorner", promoBtn); promoCorner.CornerRadius = UDim.new(0,10)
-
--- Promo modal (hidden)
-local promoModal = Instance.new("Frame", gui)
-promoModal.Size = UDim2.new(0,520,0,320)
-promoModal.Position = UDim2.new(0.5,-260,0.08,0)
-promoModal.BackgroundColor3 = Color3.fromRGB(12,12,18)
-promoModal.BorderSizePixel = 0
-promoModal.Visible = false
-local promoCorner2 = Instance.new("UICorner", promoModal); promoCorner2.CornerRadius = UDim.new(0,12)
-local promoTitle = Instance.new("TextLabel", promoModal)
-promoTitle.Size = UDim2.new(1, -24, 0, 36); promoTitle.Position = UDim2.new(0,12,0,8)
-promoTitle.BackgroundTransparency = 1; promoTitle.Font = Enum.Font.GothamBold; promoTitle.TextSize = 18
-promoTitle.TextColor3 = Color3.fromRGB(240,240,255); promoTitle.Text = "YHub Premium — Feature List (by YOUNG)"
-
-local promoBody = Instance.new("TextLabel", promoModal)
-promoBody.Size = UDim2.new(1,-24,1,-76); promoBody.Position = UDim2.new(0,12,0,48)
-promoBody.BackgroundTransparency = 1; promoBody.Font = Enum.Font.Gotham; promoBody.TextSize = 14; promoBody.TextColor3 = Color3.fromRGB(200,200,220)
-promoBody.TextWrapped = true
-promoBody.Text = table.concat({
-    "• Premium dashboard UI with glassmorphism & neon accents",
-    "• Draggable floating dock + saveable position",
-    "• Themes: Neon, Dark, Sunset (one-click)",
-    "• Auto-Tase system with aura & FOV visuals",
-    "• Animated tab transitions & iOS-style toggles",
-    "• Persistent settings (via server DataStore if enabled)",
-    "• Notifications, sounds & promo export modal",
-    "• Credits: Made by YOUNG"
-}, "\n\n")
-
-local promoClose = Instance.new("TextButton", promoModal)
-promoClose.Size = UDim2.new(0,86,0,32); promoClose.Position = UDim2.new(1,-98,0,12)
-promoClose.BackgroundColor3 = Color3.fromRGB(46,46,56)
-promoClose.Font = Enum.Font.GothamBold; promoClose.TextSize = 14; promoClose.Text = "Close"
-local promoCloseCorner = Instance.new("UICorner", promoClose); promoCloseCorner.CornerRadius = UDim.new(0,8)
-promoClose.MouseButton1Click:Connect(function() promoModal.Visible = false; pcall(function() sClick:Play() end) end)
-
-promoBtn.MouseButton1Click:Connect(function()
-    promoModal.Visible = true
-    pcall(function() sClick:Play() end)
-end)
-
--- Tab transitions (smooth)
+-- ---------- Tab switching ----------
 local currentTab = "Home"
 local function switchTo(tabName)
-    -- fade out current
-    for k,v in pairs(pages) do
-        if v.Visible and k ~= tabName then
-            TweenService:Create(v, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
-            v.Visible = false
-        end
-    end
+    for k,v in pairs(pages) do v.Visible = false end
     if pages[tabName] then
         pages[tabName].Visible = true
-        pages[tabName].BackgroundTransparency = 1
-        pages[tabName].Position = UDim2.new(0, 16, 0, 0)
-        pages[tabName].BackgroundTransparency = 1
+        pages[tabName].Position = UDim2.new(0,16,0,0)
         TweenService:Create(pages[tabName], TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0,0,0,0)}):Play()
     end
     -- highlight button
-    for name,btn in pairs(tabButtons) do
-        btn.BackgroundColor3 = Color3.fromRGB(26,26,32)
-    end
-    if tabButtons[tabName] then tabButtons[tabName].BackgroundColor3 = Color3.fromRGB(36,36,48) end
+    for _,b in pairs({tabHome,tabAuto,tabSet,tabCred}) do b.BackgroundColor3 = Color3.fromRGB(24,24,32) end
+    if tabName == "Home" then tabHome.BackgroundColor3 = Color3.fromRGB(36,36,46) end
+    if tabName == "Auto-Tase" then tabAuto.BackgroundColor3 = Color3.fromRGB(36,36,46) end
+    if tabName == "Settings" then tabSet.BackgroundColor3 = Color3.fromRGB(36,36,46) end
+    if tabName == "Credits" then tabCred.BackgroundColor3 = Color3.fromRGB(36,36,46) end
     currentTab = tabName
-    pcall(function() sClick:Play() end)
+    safePlay(sClick)
 end
 
-btnHome.MouseButton1Click:Connect(function() switchTo("Home") end)
-btnAuto.MouseButton1Click:Connect(function() switchTo("Auto-Tase") end)
-btnSet.MouseButton1Click:Connect(function() switchTo("Settings") end)
-btnCred.MouseButton1Click:Connect(function() switchTo("Credits") end)
+tabHome.MouseButton1Click:Connect(function() switchTo("Home") end)
+tabAuto.MouseButton1Click:Connect(function() switchTo("Auto-Tase") end)
+tabSet.MouseButton1Click:Connect(function() switchTo("Settings") end)
+tabCred.MouseButton1Click:Connect(function() switchTo("Credits") end)
 
--- Open / Close hub from dock
+-- ---------- Toast Notifications ----------
+local toastFolder = Instance.new("Folder", gui); toastFolder.Name = "Toasts"
+local function showToast(title, body, duration)
+    duration = duration or 3.2
+    local frame = Instance.new("Frame", toastFolder)
+    frame.Size = UDim2.new(0,320,0,72)
+    frame.Position = UDim2.new(1,-340,0.06,0)
+    frame.AnchorPoint = Vector2.new(1,0)
+    frame.BackgroundColor3 = Color3.fromRGB(20,20,28)
+    frame.BorderSizePixel = 0
+    local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,10)
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(80,180,255); stroke.Transparency = 0.82
+
+    local tl = Instance.new("TextLabel", frame)
+    tl.Size = UDim2.new(1,-16,0,20); tl.Position = UDim2.new(0,12,0,8)
+    tl.BackgroundTransparency = 1; tl.Font = Enum.Font.GothamBold; tl.TextSize = 15; tl.TextColor3 = Color3.fromRGB(240,240,255); tl.Text = title
+    local bl = Instance.new("TextLabel", frame)
+    bl.Size = UDim2.new(1,-16,0,36); bl.Position = UDim2.new(0,12,0,30)
+    bl.BackgroundTransparency = 1; bl.Font = Enum.Font.Gotham; bl.TextSize = 13; bl.TextColor3 = Color3.fromRGB(200,200,220); bl.TextWrapped = true; bl.Text = body
+
+    TweenService:Create(frame, TweenInfo.new(0.36, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(1,-16,0.06,0)}):Play()
+    safePlay(sNotif)
+    delay(duration, function()
+        TweenService:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1,-340,0.06,0)}):Play()
+        wait(0.33)
+        frame:Destroy()
+    end)
+end
+
+-- attach missing references for earlier calls
+-- equip button toast and other late-defined uses
+equipBtn.MouseButton1Click:Connect(function()
+    equipTaser()
+    showToast("Taser", "Taser equipped to your backpack.", 2.2)
+    safePlay(sClick)
+end)
+
+-- ---------- Open / Close hub from dock ----------
 local hubVisible = false
 local function openHub()
     if hubVisible then return end
     hubVisible = true
     hub.Visible = true
+    hub.Position = UDim2.new(-1, 0, 0.12, 0)
     TweenService:Create(hub, TweenInfo.new(0.36, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.04,0,0.12,0)}):Play()
-    pcall(function() sOpen:Play() end)
+    safePlay(sOpen)
     showToast("YHub Premium", "Welcome — Script by YOUNG", 3)
     -- apply saved theme
-    local themeName = savedData.theme or LocalPlayer:GetAttribute("YHub_Theme") or defaultData.theme
+    local themeName = LocalPlayer:GetAttribute("YHub_Theme") or "Neon"
     applyTheme(themeName)
-    -- switch to last used or Home
     switchTo(currentTab or "Home")
 end
 local function closeHub()
@@ -773,65 +643,57 @@ dock.MouseButton1Click:Connect(function()
     if hubVisible then closeHub() else openHub() end
 end)
 
+-- ESC close
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.Escape then
-        if promoModal.Visible then promoModal.Visible = false
-        elseif hubVisible then closeHub() end
+        if hubVisible then closeHub() end
     end
 end)
 
--- live stat updater
+-- ---------- Loading anim (fills then fades) ----------
+spawn(function()
+    local start = tick()
+    local duration = 2.6
+    while tick() - start < duration do
+        local p = (tick() - start) / duration
+        barFill:TweenSize(UDim2.new(math.clamp(p,0,1),0,1,0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.06, true)
+        RunService.RenderStepped:Wait()
+    end
+    barFill:TweenSize(UDim2.new(1,0,1,0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.12, true)
+    wait(0.18)
+    -- fade out loader
+    TweenService:Create(loading, TweenInfo.new(0.45, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(glowText, TweenInfo.new(0.45), {TextTransparency = 1}):Play()
+    wait(0.45)
+    loading:Destroy()
+    -- show dock after load
+    dock.Visible = true
+end)
+
+-- hide dock until loading done
+dock.Visible = false
+
+-- ---------- Live updates ----------
 spawn(function()
     while true do
-        liveStat.Text = "Players in range: "..tostring(playersInRange)
+        liveStat.Text = "Players in range: " .. tostring(playersInRange)
         wait(0.25)
     end
 end)
 
--- initial setup: load saved data into ui
-local function initFromSaved()
-    -- theme
-    local themeName = savedData.theme or LocalPlayer:GetAttribute("YHub_Theme") or defaultData.theme
-    applyTheme(themeName)
-    -- radius
-    local r = savedData.radius or LocalPlayer:GetAttribute("YHub_Radius") or defaultData.radius
-    local p = (r - 6) / 54
-    setRadiusFromPercent = setRadiusFromPercent or function() end -- ensure exists
-    -- use existing slider setter
-    -- find handle + sliderBG from earlier closure - call via existing variable
-    -- we already set slider state earlier; just set attributes
-    LocalPlayer:SetAttribute("YHub_Radius", r)
-    -- dock pos
-    if savedData.dockX and savedData.dockY then
-        dock.Position = UDim2.new(0, savedData.dockX, 0, savedData.dockY)
-        LocalPlayer:SetAttribute("YHub_DockX", savedData.dockX)
-        LocalPlayer:SetAttribute("YHub_DockY", savedData.dockY)
-    end
-end
+-- initialize: equip taser, start auto-tase handler (won't fire until enabled)
+equipTaser()
+startAutoTase(LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS)
 
--- apply theme and initial data
-initFromSaved()
-
--- Attempt to auto-start autoTase if previously enabled (we didn't persist ON/OFF by default)
--- startAutoTase(savedData.radius or LocalPlayer:GetAttribute("YHub_Radius") or DEFAULT_RADIUS)
-
--- try to save current settings when the player leaves (client attempts server save on bind)
+-- safety cleanup
 game:BindToClose(function()
-    local payload = { theme = savedData.theme or defaultData.theme, radius = savedData.radius or defaultData.radius, dockX = LocalPlayer:GetAttribute("YHub_DockX"), dockY = LocalPlayer:GetAttribute("YHub_DockY") }
-    if persistenceAvailable then
-        requestServerSave(payload)
-    else
-        localSave(payload)
-    end
     stopAutoTase()
+    if auraPart then auraPart:Destroy() end
+    if fovCircle then fovCircle:Destroy() end
 end)
 
--- convenience: if server persistence is missing, notify developer
-if not persistenceAvailable then
-    showToast("Persistence Notice", "Server persistence (DataStore) not found. Save will be session-only unless you add the server script.", 5)
-end
+-- final ready toast after small delay
+delay(0.6, function() showToast("Loaded", "YHub Premium ready — by YOUNG", 2.6) end)
 
--- finalize
-equipTaser()
-showToast("Loaded", "YHub Premium v16 loaded — by YOUNG", 3)
+-- End of script
